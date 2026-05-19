@@ -179,9 +179,6 @@ function QuestionCard({
   submitting: boolean;
 }) {
   const isExact = question.answerType === "exact";
-  const [mode, setMode] = useState<"number" | "range">(
-    isExact ? "number" : "range"
-  );
   const [answer, setAnswer] = useState("");
   const [rangeMin, setRangeMin] = useState("");
   const [rangeMax, setRangeMax] = useState("");
@@ -198,7 +195,7 @@ function QuestionCard({
 
   function handleFormSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (mode === "number") {
+    if (isExact) {
       const val = parseFloat(answer);
       if (isNaN(val)) {
         toast.error("Enter a valid number");
@@ -292,62 +289,28 @@ function QuestionCard({
                 />
               </div>
             ) : (
-              <>
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={mode === "number" ? "default" : "outline"}
-                    onClick={() => setMode("number")}
-                  >
-                    Point Estimate
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={mode === "range" ? "default" : "outline"}
-                    onClick={() => setMode("range")}
-                  >
-                    Range
-                  </Button>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Min</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    placeholder="Lower bound"
+                    value={rangeMin}
+                    onChange={(e) => setRangeMin(e.target.value)}
+                  />
                 </div>
-
-                {mode === "number" ? (
-                  <div className="space-y-2">
-                    <Label>Your Estimate</Label>
-                    <Input
-                      type="number"
-                      step="any"
-                      placeholder="Enter a number"
-                      value={answer}
-                      onChange={(e) => setAnswer(e.target.value)}
-                    />
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label>Min</Label>
-                      <Input
-                        type="number"
-                        step="any"
-                        placeholder="Lower bound"
-                        value={rangeMin}
-                        onChange={(e) => setRangeMin(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Max</Label>
-                      <Input
-                        type="number"
-                        step="any"
-                        placeholder="Upper bound"
-                        value={rangeMax}
-                        onChange={(e) => setRangeMax(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                )}
-              </>
+                <div className="space-y-2">
+                  <Label>Max</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    placeholder="Upper bound"
+                    value={rangeMax}
+                    onChange={(e) => setRangeMax(e.target.value)}
+                  />
+                </div>
+              </div>
             )}
 
             <Button type="submit" className="w-full" disabled={submitting}>

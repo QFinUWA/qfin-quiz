@@ -47,33 +47,12 @@ export async function submitAnswer(data: {
 
   if (answerType === "exact") {
     isCorrect = data.answerValue === question.answer;
-  } else if (answerType === "range_absolute") {
-    const tol = question.rangeTolerance ?? 0;
-    if (data.submissionType === "number") {
-      isCorrect =
-        data.answerValue !== undefined &&
-        Math.abs(data.answerValue - question.answer) <= tol;
-    } else {
-      isCorrect =
-        data.rangeMin !== undefined &&
-        data.rangeMax !== undefined &&
-        data.rangeMin <= question.answer &&
-        data.rangeMax >= question.answer;
-    }
-  } else if (answerType === "range_percent") {
-    const pct = (question.rangeTolerance ?? 0) / 100;
-    const tol = Math.abs(question.answer * pct);
-    if (data.submissionType === "number") {
-      isCorrect =
-        data.answerValue !== undefined &&
-        Math.abs(data.answerValue - question.answer) <= tol;
-    } else {
-      isCorrect =
-        data.rangeMin !== undefined &&
-        data.rangeMax !== undefined &&
-        data.rangeMin <= question.answer &&
-        data.rangeMax >= question.answer;
-    }
+  } else {
+    isCorrect =
+      data.rangeMin !== undefined &&
+      data.rangeMax !== undefined &&
+      data.rangeMin <= question.answer &&
+      data.rangeMax >= question.answer;
   }
 
   const pointsAwarded = isCorrect ? pointsForAttempt : 0;

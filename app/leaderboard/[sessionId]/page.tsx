@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, use } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -29,6 +31,7 @@ export default function LeaderboardPage({
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = use(params);
+  const router = useRouter();
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [totalQuestions, setTotalQuestions] = useState(0);
 
@@ -51,11 +54,20 @@ export default function LeaderboardPage({
 
   return (
     <div className="flex flex-col min-h-full">
-      <header className="border-b px-4 py-3">
-        <h1 className="font-bold text-lg">Leaderboard</h1>
-        <p className="text-sm text-muted-foreground">
-          {totalQuestions} question{totalQuestions !== 1 ? "s" : ""} total
-        </p>
+      <header className="border-b px-4 py-3 flex items-center justify-between">
+        <div>
+          <h1 className="font-bold text-lg">Leaderboard</h1>
+          <p className="text-sm text-muted-foreground">
+            {totalQuestions} question{totalQuestions !== 1 ? "s" : ""} total
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => router.back()}
+        >
+          Back
+        </Button>
       </header>
 
       <main className="flex-1 p-4 max-w-2xl mx-auto w-full">

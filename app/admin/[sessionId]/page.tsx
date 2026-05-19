@@ -134,34 +134,39 @@ export default function AdminPage({
 
   return (
     <div className="flex flex-col min-h-full">
-      <header className="border-b px-4 py-3 flex items-center justify-between">
-        <div>
-          <h1 className="font-bold text-lg">{data.session.name}</h1>
-          <div className="flex items-center gap-2 mt-1">
-            <Badge variant="outline" className="font-mono">
-              {data.session.joinCode}
-            </Badge>
-            <Badge
-              variant={
-                data.session.status === "active"
-                  ? "default"
-                  : data.session.status === "finished"
-                    ? "secondary"
-                    : "outline"
-              }
-            >
-              {data.session.status}
-            </Badge>
+      <header className="border-b px-6 py-5">
+        <div className="flex items-start justify-between max-w-4xl mx-auto w-full">
+          <div>
+            <h1 className="font-bold text-2xl">{data.session.name}</h1>
+            <div className="flex items-center gap-3 mt-2">
+              <div className="flex items-center gap-2 bg-muted px-3 py-1.5 rounded-lg">
+                <span className="text-xs text-muted-foreground uppercase tracking-wider">Join Code</span>
+                <span className="font-mono text-xl font-bold tracking-widest">
+                  {data.session.joinCode}
+                </span>
+              </div>
+              <Badge
+                className="text-sm px-3 py-1"
+                variant={
+                  data.session.status === "active"
+                    ? "default"
+                    : data.session.status === "finished"
+                      ? "secondary"
+                      : "outline"
+                }
+              >
+                {data.session.status}
+              </Badge>
+            </div>
           </div>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push(`/leaderboard/${sessionId}`)}
-          >
-            Leaderboard
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push(`/leaderboard/${sessionId}`)}
+            >
+              Leaderboard
+            </Button>
           {data.session.status === "lobby" && (
             <Button
               size="sm"
@@ -187,6 +192,7 @@ export default function AdminPage({
               End Session
             </Button>
           )}
+          </div>
         </div>
       </header>
 
@@ -528,8 +534,8 @@ function AddQuestionForm({
           />
           <p className="text-xs text-muted-foreground">
             {answerType === "range_percent"
-              ? `Teams must submit a range that contains the answer. A point estimate within ${rangeTolerance || "X"}% of ${answer || "the answer"} is also accepted.`
-              : `Teams must submit a range that contains the answer. A point estimate within +/-${rangeTolerance || "X"} of ${answer || "the answer"} is also accepted.`}
+              ? `Teams must submit a range that contains the answer.`
+              : `Teams must submit a range that contains the answer.`}
           </p>
         </div>
       )}
