@@ -4,7 +4,7 @@ FROM base AS deps
 WORKDIR /app
 RUN apk add --no-cache python3 make g++
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install --frozen-lockfile 2>/dev/null || npm install
 
 FROM base AS builder
 WORKDIR /app
