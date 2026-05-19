@@ -1,65 +1,161 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "sonner";
+import { createSession, getSessionByCode } from "@/lib/actions/sessions";
 
 export default function Home() {
+  const router = useRouter();
+  const [joinCode, setJoinCode] = useState("");
+  const [sessionName, setSessionName] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleJoin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!joinCode.trim()) return;
+    setLoading(true);
+    try {
+      const session = await getSessionByCode(joinCode.trim());
+      if (!session) {
+        toast.error("Session not found");
+        return;
+      }
+      router.push(`/join/${session.joinCode}`);
+    } catch {
+      toast.error("Failed to find session");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!sessionName.trim() || !adminPassword.trim()) return;
+    setLoading(true);
+    try {
+      const result = await createSession(
+        sessionName.trim(),
+        adminPassword.trim()
+      );
+      localStorage.setItem(`admin-${result.id}`, adminPassword);
+      router.push(`/admin/${result.id}`);
+    } catch {
+      toast.error("Failed to create session");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <div className="flex flex-1 items-center justify-center p-4">
+      <div className="w-full max-w-md space-y-8">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold tracking-tight">QFin Quiz</h1>
+          <p className="mt-2 text-muted-foreground">
+            Estimation games and quizzes
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+
+        <Tabs defaultValue="join" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="join">Join Session</TabsTrigger>
+            <TabsTrigger value="create">Create Session</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="join">
+            <Card>
+              <CardHeader>
+                <CardTitle>Join a Session</CardTitle>
+                <CardDescription>
+                  Enter the session code to join
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleJoin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="joinCode">Session Code</Label>
+                    <Input
+                      id="joinCode"
+                      placeholder="e.g. ABC123"
+                      value={joinCode}
+                      onChange={(e) =>
+                        setJoinCode(e.target.value.toUpperCase())
+                      }
+                      maxLength={6}
+                      className="text-center text-2xl tracking-widest font-mono"
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={loading || !joinCode.trim()}
+                  >
+                    Join
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="create">
+            <Card>
+              <CardHeader>
+                <CardTitle>Create a Session</CardTitle>
+                <CardDescription>
+                  Set up a new quiz session
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleCreate} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="sessionName">Session Name</Label>
+                    <Input
+                      id="sessionName"
+                      placeholder="e.g. Week 5 Estimation Game"
+                      value={sessionName}
+                      onChange={(e) => setSessionName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="adminPassword">Admin Password</Label>
+                    <Input
+                      id="adminPassword"
+                      type="password"
+                      placeholder="Password to manage this session"
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={
+                      loading ||
+                      !sessionName.trim() ||
+                      !adminPassword.trim()
+                    }
+                  >
+                    Create Session
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }
