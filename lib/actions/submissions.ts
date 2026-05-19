@@ -48,9 +48,24 @@ export async function submitAnswer(data: {
   if (answerType === "exact") {
     isCorrect = data.answerValue === question.answer;
   } else {
+    if (data.rangeMin === undefined || data.rangeMax === undefined) {
+      return { error: "Range values required" };
+    }
+
+    const spread = data.rangeMax - data.rangeMin;
+    const tolerance = question.rangeTolerance ?? Infinity;
+
+    if (answerType === "range_absolute" && spread > tolerance) {
+      return { error: `Range too wide. Max spread: ${tolerance}` };
+    }
+    if (answerType === "range_percent") {
+      const maxAllowed = data.rangeMin * (1 + tolerance / 100);
+      if (data.rangeMax > maxAllowed) {
+        return { error: `Range too wide. Upper bound can be at most ${tolerance}% above lower bound` };
+      }
+    }
+
     isCorrect =
-      data.rangeMin !== undefined &&
-      data.rangeMax !== undefined &&
       data.rangeMin <= question.answer &&
       data.rangeMax >= question.answer;
   }

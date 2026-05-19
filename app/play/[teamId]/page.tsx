@@ -213,6 +213,16 @@ function QuestionCard({
         toast.error("Min must be less than max");
         return;
       }
+      if (question.rangeTolerance !== null) {
+        if (question.answerType === "range_absolute" && (max - min) > question.rangeTolerance) {
+          toast.error(`Range too wide. Max spread: ${question.rangeTolerance}`);
+          return;
+        }
+        if (question.answerType === "range_percent" && max > min * (1 + question.rangeTolerance / 100)) {
+          toast.error(`Range too wide. Upper bound can be at most ${question.rangeTolerance}% above lower bound`);
+          return;
+        }
+      }
       onSubmit(question.id, "range", { min, max });
     }
     setAnswer("");
@@ -224,8 +234,8 @@ function QuestionCard({
     question.answerType === "exact"
       ? "Exact answer"
       : question.answerType === "range_percent"
-        ? "Range answer"
-        : "Range answer";
+        ? `Range answer - upper bound can be at most ${question.rangeTolerance}% above lower bound`
+        : `Range answer - max spread: ${question.rangeTolerance}`;
 
   return (
     <Card

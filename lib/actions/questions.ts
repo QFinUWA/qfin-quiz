@@ -37,7 +37,7 @@ export async function addQuestion(
       maxPoints: data.maxPoints,
       maxAttempts: data.maxAttempts,
       pointsDropOff: JSON.stringify(data.pointsDropOff),
-      status: "hidden",
+      status: "active",
       sortOrder: existing.length,
       createdAt: new Date(),
     })

@@ -20,7 +20,7 @@ export async function GET(
     .all();
 
   const activeQuestions = sessionQuestions
-    .filter((q) => q.status === "active" || q.status === "revealed")
+    .filter((q) => q.status === "active" || q.status === "closed" || q.status === "revealed")
     .map((q) => {
       let teamSubmissions: typeof submissions.$inferSelect[] = [];
       if (teamId) {
