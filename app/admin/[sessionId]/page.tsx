@@ -70,6 +70,7 @@ export default function AdminPage({
   const [addingQuestion, setAddingQuestion] = useState(false);
   const [realizing, setRealizing] = useState<string | null>(null);
   const [detailsQuestion, setDetailsQuestion] = useState<string | null>(null);
+  const [detailsEditing, setDetailsEditing] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{
     type: "close" | "reveal" | "reveal-all" | "delete";
     questionId?: string;
@@ -337,7 +338,8 @@ export default function AdminPage({
         <DetailsDialog
           question={data.questions.find((q) => q.id === detailsQuestion) ?? null}
           open={!!detailsQuestion}
-          onClose={() => setDetailsQuestion(null)}
+          onClose={() => { setDetailsQuestion(null); setDetailsEditing(false); }}
+          startEditing={detailsEditing}
         />
 
         {/* Questions */}
@@ -439,9 +441,16 @@ export default function AdminPage({
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => setDetailsQuestion(q.id)}
+                        onClick={() => { setDetailsQuestion(q.id); setDetailsEditing(false); }}
                       >
                         Details
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { setDetailsQuestion(q.id); setDetailsEditing(true); }}
+                      >
+                        Edit
                       </Button>
                       {q.status === "hidden" && isSim && (
                         <Button
@@ -867,10 +876,12 @@ function DetailsDialog({
   question,
   open,
   onClose,
+  startEditing = false,
 }: {
   question: QuestionRow | null;
   open: boolean;
   onClose: () => void;
+  startEditing?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState("");
@@ -893,9 +904,9 @@ function DetailsDialog({
       setMaxPoints(String(question.maxPoints));
       setMaxAttempts(String(question.maxAttempts));
       setDropOff(question.pointsDropOff.replace(/[\[\]]/g, ""));
-      setEditing(false);
+      setEditing(startEditing);
     }
-  }, [question, open]);
+  }, [question, open, startEditing]);
 
   if (!question) return null;
 
