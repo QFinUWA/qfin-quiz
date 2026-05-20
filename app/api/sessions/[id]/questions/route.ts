@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { questions, submissions } from "@/lib/db/schema";
+import { sessions, questions, submissions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +11,11 @@ export async function GET(
   const { id: sessionId } = await params;
   const url = new URL(request.url);
   const teamId = url.searchParams.get("teamId");
+
+  const session = db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
+  if (!session || session.status === "lobby") {
+    return Response.json({ questions: [], sessionStatus: session?.status ?? "lobby" });
+  }
 
   const sessionQuestions = db
     .select()
@@ -72,5 +77,5 @@ export async function GET(
       };
     });
 
-  return Response.json({ questions: activeQuestions });
+  return Response.json({ questions: activeQuestions, sessionStatus: session.status });
 }

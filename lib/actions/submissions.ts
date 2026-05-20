@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { submissions, questions } from "@/lib/db/schema";
+import { sessions, submissions, questions } from "@/lib/db/schema";
 import { generateId } from "@/lib/utils";
 import { eq, and } from "drizzle-orm";
 
@@ -21,6 +21,9 @@ export async function submitAnswer(data: {
 
   if (!question) return { error: "Question not found" };
   if (question.status !== "active") return { error: "Question is not active" };
+
+  const session = db.select().from(sessions).where(eq(sessions.id, question.sessionId)).get();
+  if (!session || session.status !== "active") return { error: "Session is not active" };
 
   const existing = db
     .select()

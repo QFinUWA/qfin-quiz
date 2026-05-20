@@ -54,6 +54,7 @@ export default function PlayPage({
   const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
 
@@ -76,6 +77,7 @@ export default function PlayPage({
       );
       const data = await res.json();
       setQuestions(data.questions);
+      setSessionStatus(data.sessionStatus);
     } catch {
       // silent retry
     }
@@ -151,9 +153,15 @@ export default function PlayPage({
         {questions.length === 0 ? (
           <div className="flex flex-1 items-center justify-center py-20">
             <div className="text-center space-y-2">
-              <p className="text-xl font-medium">Waiting for questions...</p>
+              <p className="text-xl font-medium">
+                {sessionStatus === "lobby"
+                  ? "Waiting for session to start..."
+                  : "Waiting for questions..."}
+              </p>
               <p className="text-muted-foreground">
-                The admin will activate questions soon
+                {sessionStatus === "lobby"
+                  ? "The session hasn't started yet. Hang tight!"
+                  : "The admin will activate questions soon"}
               </p>
             </div>
           </div>
