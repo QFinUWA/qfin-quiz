@@ -47,7 +47,44 @@ export async function submitAnswer(data: {
   const answerType = question.answerType || "exact";
   const isSimulation = question.answerSource === "simulation";
 
-  if (answerType === "exact" && !isSimulation) {
+  if (isSimulation) {
+    const results: number[] = JSON.parse(question.simulationResults || "[]");
+    if (results.length === 0) {
+      return { error: "Simulation not yet realized" };
+    }
+
+    let hits: number;
+    if (answerType === "exact") {
+      if (data.answerValue === undefined) {
+        return { error: "Answer value required" };
+      }
+      hits = results.filter((r) => r === data.answerValue).length;
+    } else {
+      if (data.rangeMin === undefined || data.rangeMax === undefined) {
+        return { error: "Range values required" };
+      }
+      const spread = data.rangeMax - data.rangeMin;
+      const tolerance = question.rangeTolerance ?? Infinity;
+      if (answerType === "range_absolute" && spread > tolerance) {
+        return { error: `Range too wide. Max width: ${tolerance}` };
+      }
+      if (answerType === "range_percent") {
+        const maxAllowed = data.rangeMin * (1 + tolerance / 100);
+        if (data.rangeMax > maxAllowed) {
+          return {
+            error: `Range too wide. Upper bound can be at most ${tolerance}% above lower bound`,
+          };
+        }
+      }
+      hits = results.filter(
+        (r) => r >= data.rangeMin! && r <= data.rangeMax!
+      ).length;
+    }
+
+    const proportion = hits / results.length;
+    pointsAwarded = Math.round(proportion * pointsForAttempt);
+    isCorrect = false;
+  } else if (answerType === "exact") {
     isCorrect = data.answerValue === question.answer;
     pointsAwarded = isCorrect ? pointsForAttempt : 0;
   } else {
@@ -70,24 +107,9 @@ export async function submitAnswer(data: {
       }
     }
 
-    if (isSimulation) {
-      const results: number[] = JSON.parse(question.simulationResults || "[]");
-      if (results.length === 0) {
-        return { error: "Simulation not yet realized" };
-      }
-
-      const hits = results.filter(
-        (r) => r >= data.rangeMin! && r <= data.rangeMax!
-      ).length;
-      const proportion = hits / results.length;
-
-      pointsAwarded = Math.round(proportion * pointsForAttempt);
-      isCorrect = false;
-    } else {
-      isCorrect =
-        data.rangeMin <= question.answer && data.rangeMax >= question.answer;
-      pointsAwarded = isCorrect ? pointsForAttempt : 0;
-    }
+    isCorrect =
+      data.rangeMin <= question.answer && data.rangeMax >= question.answer;
+    pointsAwarded = isCorrect ? pointsForAttempt : 0;
   }
 
   const id = generateId();

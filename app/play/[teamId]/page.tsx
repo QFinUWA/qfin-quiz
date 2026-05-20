@@ -276,9 +276,11 @@ function QuestionCard({
   }
 
   const answerTypeLabel = isSimulation
-    ? question.answerType === "range_percent"
-      ? `Simulation - submit a range (upper at most ${question.rangeTolerance}% above lower)`
-      : `Simulation - submit a range (${question.rangeTolerance} units wide)`
+    ? question.answerType === "exact"
+      ? "Simulation - submit an exact number"
+      : question.answerType === "range_percent"
+        ? `Simulation - submit a range (upper at most ${question.rangeTolerance}% above lower)`
+        : `Simulation - submit a range (${question.rangeTolerance} units wide)`
     : question.answerType === "exact"
       ? "Exact answer"
       : question.answerType === "range_percent"

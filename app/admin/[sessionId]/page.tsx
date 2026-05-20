@@ -546,7 +546,11 @@ function AddQuestionForm({
       setSimulationScript(ev.target?.result as string);
       toast.success(`Loaded ${file.name}`);
     };
+    reader.onerror = () => {
+      toast.error("Failed to read file");
+    };
     reader.readAsText(file);
+    e.target.value = "";
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -651,10 +655,7 @@ function AddQuestionForm({
             type="button"
             size="sm"
             variant={answerSource === "simulation" ? "default" : "outline"}
-            onClick={() => {
-              setAnswerSource("simulation");
-              if (answerType === "exact") setAnswerType("range_absolute");
-            }}
+            onClick={() => setAnswerSource("simulation")}
           >
             Simulation
           </Button>
@@ -735,16 +736,14 @@ function AddQuestionForm({
       <div className="space-y-2">
         <Label>Response Type</Label>
         <div className="flex gap-2 flex-wrap">
-          {!isSimulation && (
-            <Button
-              type="button"
-              size="sm"
-              variant={answerType === "exact" ? "default" : "outline"}
-              onClick={() => setAnswerType("exact")}
-            >
-              Exact Number
-            </Button>
-          )}
+          <Button
+            type="button"
+            size="sm"
+            variant={answerType === "exact" ? "default" : "outline"}
+            onClick={() => setAnswerType("exact")}
+          >
+            Exact Number
+          </Button>
           <Button
             type="button"
             size="sm"
