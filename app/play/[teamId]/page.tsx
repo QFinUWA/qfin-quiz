@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, use } from "react";
+import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -199,62 +199,30 @@ function QuestionCard({
   const [answer, setAnswer] = useState("");
   const [rangeMin, setRangeMin] = useState("");
   const [rangeMax, setRangeMax] = useState("");
-  const minTouched = useRef(false);
-  const maxTouched = useRef(false);
-  const autoFillMax = useRef(true);
-  const autoFillMin = useRef(true);
 
-  function handleMinFocus() {
-    minTouched.current = true;
-    autoFillMax.current = !maxTouched.current;
-  }
+  const tol = question.rangeTolerance;
+  const minNum = parseFloat(rangeMin);
+  const maxNum = parseFloat(rangeMax);
+  const maxHint = showRange && !isNaN(minNum) && tol !== null
+    ? question.answerType === "range_percent"
+      ? +(minNum * (1 + tol / 100)).toFixed(2)
+      : +(minNum + tol).toFixed(2)
+    : null;
+  const minHint = showRange && !isNaN(maxNum) && tol !== null
+    ? question.answerType === "range_percent"
+      ? +(maxNum / (1 + tol / 100)).toFixed(2)
+      : +(maxNum - tol).toFixed(2)
+    : null;
 
-  function handleMaxFocus() {
-    maxTouched.current = true;
-    autoFillMin.current = !minTouched.current;
-  }
-
-  function handleMinChange(val: string) {
-    setRangeMin(val);
-    if (!autoFillMax.current) return;
-    const num = parseFloat(val);
-    if (isNaN(num) || question.rangeTolerance === null) return;
-    if (question.answerType === "range_percent") {
-      setRangeMax(String(+(num * (1 + question.rangeTolerance / 100)).toFixed(2)));
-    } else {
-      setRangeMax(String(+(num + question.rangeTolerance).toFixed(2)));
-    }
-  }
-
-  function handleMaxChange(val: string) {
-    setRangeMax(val);
-    if (!autoFillMin.current) return;
-    const num = parseFloat(val);
-    if (isNaN(num) || question.rangeTolerance === null) return;
-    if (question.answerType === "range_percent") {
-      setRangeMin(String(+(num / (1 + question.rangeTolerance / 100)).toFixed(2)));
-    } else {
-      setRangeMin(String(+(num - question.rangeTolerance).toFixed(2)));
-    }
-  }
-
-  const min = parseFloat(rangeMin);
-  const max = parseFloat(rangeMax);
   let rangeError: string | null = null;
-  if (showRange && rangeMin && rangeMax && !isNaN(min) && !isNaN(max)) {
-    if (min > max) {
+  if (showRange && rangeMin && rangeMax && !isNaN(minNum) && !isNaN(maxNum)) {
+    if (minNum > maxNum) {
       rangeError = "Min must be less than max";
-    } else if (question.rangeTolerance !== null) {
-      if (
-        question.answerType === "range_absolute" &&
-        max - min > question.rangeTolerance
-      ) {
-        rangeError = `Range too wide. Max width: ${question.rangeTolerance}`;
-      } else if (
-        question.answerType === "range_percent" &&
-        max > min * (1 + question.rangeTolerance / 100)
-      ) {
-        rangeError = `Range too wide. Upper bound can be at most ${question.rangeTolerance}% above lower bound`;
+    } else if (tol !== null) {
+      if (question.answerType === "range_absolute" && maxNum - minNum > tol) {
+        rangeError = `Range too wide (max width: ${tol})`;
+      } else if (question.answerType === "range_percent" && maxNum > minNum * (1 + tol / 100)) {
+        rangeError = `Range too wide (upper at most ${tol}% above lower)`;
       }
     }
   }
@@ -283,22 +251,16 @@ function QuestionCard({
       }
       onSubmit(question.id, "number", { answer: val });
     } else {
-      const min = parseFloat(rangeMin);
-      const max = parseFloat(rangeMax);
-      if (isNaN(min) || isNaN(max)) {
+      if (isNaN(minNum) || isNaN(maxNum)) {
         toast.error("Enter valid range values");
         return;
       }
       if (rangeError) return;
-      onSubmit(question.id, "range", { min, max });
+      onSubmit(question.id, "range", { min: minNum, max: maxNum });
     }
     setAnswer("");
     setRangeMin("");
     setRangeMax("");
-    minTouched.current = false;
-    maxTouched.current = false;
-    autoFillMax.current = true;
-    autoFillMin.current = true;
   }
 
   const answerTypeLabel = isSimulation
@@ -385,25 +347,37 @@ function QuestionCard({
             {showRange ? <>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <Label>Min</Label>
+                  <div className="flex justify-between items-baseline">
+                    <Label>Min</Label>
+                    {minHint !== null && (
+                      <span className="text-[11px] text-muted-foreground">
+                        lowest: {minHint}
+                      </span>
+                    )}
+                  </div>
                   <Input
                     type="number"
                     step="any"
                     placeholder="Lower bound"
                     value={rangeMin}
-                    onFocus={handleMinFocus}
-                    onChange={(e) => handleMinChange(e.target.value)}
+                    onChange={(e) => setRangeMin(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Max</Label>
+                  <div className="flex justify-between items-baseline">
+                    <Label>Max</Label>
+                    {maxHint !== null && (
+                      <span className="text-[11px] text-muted-foreground">
+                        highest: {maxHint}
+                      </span>
+                    )}
+                  </div>
                   <Input
                     type="number"
                     step="any"
                     placeholder="Upper bound"
                     value={rangeMax}
-                    onFocus={handleMaxFocus}
-                    onChange={(e) => handleMaxChange(e.target.value)}
+                    onChange={(e) => setRangeMax(e.target.value)}
                   />
                 </div>
               </div>
