@@ -122,6 +122,18 @@ export async function checkScheduledTransitions(sessionId: string) {
     return { ...session, status: "finished" as const, scheduledEndAt: null };
   }
 
+  if (
+    session.status === "finished" &&
+    session.scheduledStartAt &&
+    now >= session.scheduledStartAt
+  ) {
+    db.update(sessions)
+      .set({ status: "active", scheduledStartAt: null })
+      .where(eq(sessions.id, sessionId))
+      .run();
+    return { ...session, status: "active" as const, scheduledStartAt: null };
+  }
+
   return session;
 }
 

@@ -61,6 +61,7 @@ export default function PlayPage({
   const [scheduledEndAt, setScheduledEndAt] = useState<number | null>(null);
   const [scheduledStartAt, setScheduledStartAt] = useState<number | null>(null);
   const [countdown, setCountdown] = useState<string | null>(null);
+  const [leaderboard, setLeaderboard] = useState<{ teamId: string; teamName: string; totalPoints: number }[]>([]);
 
   useEffect(() => {
     const storedSession = localStorage.getItem("sessionId");
@@ -85,6 +86,10 @@ export default function PlayPage({
       setTeamTotalPoints(data.teamTotalPoints ?? 0);
       setScheduledEndAt(data.scheduledEndAt ?? null);
       setScheduledStartAt(data.scheduledStartAt ?? null);
+
+      const lbRes = await fetch(`/api/sessions/${sessionId}/leaderboard`);
+      const lbData = await lbRes.json();
+      setLeaderboard(lbData.leaderboard ?? []);
     } catch {
       // silent retry
     }
@@ -198,6 +203,32 @@ export default function PlayPage({
             <p className="font-medium">Session ended</p>
             <p className="text-sm text-muted-foreground">Final score: {teamTotalPoints} points</p>
           </div>
+        )}
+        {leaderboard.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-sm">Leaderboard</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-3">
+              <div className="space-y-1">
+                {leaderboard.map((entry, i) => (
+                  <div
+                    key={entry.teamId}
+                    className={`flex items-center justify-between text-sm py-1 px-2 rounded ${
+                      entry.teamId === teamId ? "bg-muted font-medium" : ""
+                    }`}
+                  >
+                    <span>
+                      <span className="text-muted-foreground w-5 inline-block">{i + 1}.</span>{" "}
+                      {entry.teamName}
+                      {entry.teamId === teamId && <span className="text-xs text-muted-foreground ml-1">(you)</span>}
+                    </span>
+                    <span className="font-mono tabular-nums">{entry.totalPoints}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         )}
         {questions.length === 0 ? (
           <div className="flex flex-1 items-center justify-center py-20">

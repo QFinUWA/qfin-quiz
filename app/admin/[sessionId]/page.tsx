@@ -117,7 +117,9 @@ export default function AdminPage({
         ? data.session.scheduledStartAt.getTime()
         : data.session.status === "active" && data.session.scheduledEndAt
           ? data.session.scheduledEndAt.getTime()
-          : null;
+          : data.session.status === "finished" && data.session.scheduledStartAt
+            ? data.session.scheduledStartAt.getTime()
+            : null;
     if (!target) {
       setCountdown(null);
       return;
@@ -239,7 +241,7 @@ export default function AdminPage({
           {countdown && (
             <div className="text-right">
               <p className="text-xs text-muted-foreground">
-                {data.session.status === "lobby" ? "Starts in" : "Ends in"}
+                {data.session.status === "active" ? "Ends in" : "Reopens in"}
               </p>
               <p className="font-mono text-2xl font-bold tabular-nums">{countdown}</p>
             </div>
@@ -296,25 +298,35 @@ export default function AdminPage({
               </>
             )}
             {data.session.status === "finished" && (
-              <Button
-                size="sm"
-                onClick={() => setConfirmAction({ type: "reopen-session", title: "" })}
-              >
-                Reopen Session
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => setConfirmAction({ type: "reopen-session", title: "" })}
+                >
+                  Reopen Now
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setScheduleType("start")}
+                >
+                  Schedule Reopen
+                </Button>
+              </>
             )}
             </div>
             {((data.session.status === "lobby" && data.session.scheduledStartAt) ||
-              (data.session.status === "active" && data.session.scheduledEndAt)) && (
+              (data.session.status === "active" && data.session.scheduledEndAt) ||
+              (data.session.status === "finished" && data.session.scheduledStartAt)) && (
               <Button
                 size="sm"
                 variant="ghost"
                 className="text-xs"
                 onClick={async () => {
-                  if (data.session.status === "lobby") {
-                    await setScheduledStart(sessionId, null);
-                  } else {
+                  if (data.session.status === "active") {
                     await setScheduledEnd(sessionId, null);
+                  } else {
+                    await setScheduledStart(sessionId, null);
                   }
                   fetchData();
                   toast.success("Schedule cleared");
