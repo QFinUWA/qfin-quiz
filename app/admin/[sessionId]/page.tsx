@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, use } from "react";
+import { useState, useEffect, useCallback, useRef, use } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,7 @@ import {
   addQuestion,
   updateQuestionStatus,
   deleteQuestion,
+  realizeSimulation,
 } from "@/lib/actions/questions";
 
 type SessionData = NonNullable<Awaited<ReturnType<typeof getSessionData>>>;
@@ -55,6 +56,7 @@ export default function AdminPage({
   const [password, setPassword] = useState("");
   const [data, setData] = useState<SessionData | null>(null);
   const [addingQuestion, setAddingQuestion] = useState(false);
+  const [realizing, setRealizing] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem(`admin-${sessionId}`);
@@ -89,6 +91,25 @@ export default function AdminPage({
       localStorage.setItem(`admin-${sessionId}`, password);
     } else {
       toast.error("Wrong password");
+    }
+  }
+
+  async function handleRealize(questionId: string) {
+    setRealizing(questionId);
+    try {
+      const result = await realizeSimulation(questionId);
+      if ("error" in result) {
+        toast.error(result.error);
+      } else {
+        toast.success(
+          `Realized! ${result.resultCount} results (range: ${result.min} - ${result.max})`
+        );
+        fetchData();
+      }
+    } catch {
+      toast.error("Failed to realize simulation");
+    } finally {
+      setRealizing(null);
     }
   }
 
@@ -275,6 +296,11 @@ export default function AdminPage({
                 const teamsCorrect = new Set(
                   qSubs.filter((s) => s.isCorrect).map((s) => s.teamId)
                 ).size;
+                const isSim = q.answerType === "simulation";
+                const simResults: number[] | null =
+                  isSim && q.simulationResults
+                    ? JSON.parse(q.simulationResults)
+                    : null;
 
                 return (
                   <div key={q.id} className="border rounded-lg p-4 space-y-2">
@@ -286,16 +312,36 @@ export default function AdminPage({
                             {q.description}
                           </p>
                         )}
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Answer: <span className="font-mono">{q.answer}</span>{" "}
-                          | Type: {q.answerType === "exact" ? "Exact" : q.answerType === "range_percent" ? `Range (+/-${q.rangeTolerance}%)` : `Range (+/-${q.rangeTolerance})`}{" "}
-                          | Max: {q.maxPoints}pts | Attempts: {q.maxAttempts} |
-                          Drop-off: {q.pointsDropOff}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {teamsAttempted} teams attempted, {teamsCorrect}{" "}
-                          correct
-                        </p>
+                        {isSim ? (
+                          <div className="text-sm text-muted-foreground mt-1 space-y-0.5">
+                            <p>
+                              Type: Simulation | n={q.simulationN} | Tolerance: {q.rangeTolerance}{" "}
+                              | Max: {q.maxPoints}pts | Attempts: {q.maxAttempts}{" "}
+                              | Drop-off: {q.pointsDropOff}
+                            </p>
+                            {simResults && (
+                              <p>
+                                Results: {simResults.length} values, range [{Math.min(...simResults)}, {Math.max(...simResults)}]
+                              </p>
+                            )}
+                            <p>
+                              {teamsAttempted} teams attempted
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Answer: <span className="font-mono">{q.answer}</span>{" "}
+                              | Type: {q.answerType === "exact" ? "Exact" : q.answerType === "range_percent" ? `Range (+/-${q.rangeTolerance}%)` : `Range (+/-${q.rangeTolerance})`}{" "}
+                              | Max: {q.maxPoints}pts | Attempts: {q.maxAttempts} |
+                              Drop-off: {q.pointsDropOff}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              {teamsAttempted} teams attempted, {teamsCorrect}{" "}
+                              correct
+                            </p>
+                          </>
+                        )}
                       </div>
                       <Badge
                         variant={
@@ -311,7 +357,18 @@ export default function AdminPage({
                     </div>
                     <Separator />
                     <div className="flex gap-2 flex-wrap">
-                      {q.status === "hidden" && (
+                      {q.status === "hidden" && isSim && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleRealize(q.id)}
+                          disabled={realizing === q.id}
+                        >
+                          {realizing === q.id
+                            ? "Running simulation..."
+                            : "Realize & Activate"}
+                        </Button>
+                      )}
+                      {q.status === "hidden" && !isSim && (
                         <Button
                           size="sm"
                           onClick={async () => {
@@ -393,7 +450,7 @@ function AddQuestionForm({
   const [description, setDescription] = useState("");
   const [answer, setAnswer] = useState("");
   const [answerType, setAnswerType] = useState<
-    "exact" | "range_absolute" | "range_percent"
+    "exact" | "range_absolute" | "range_percent" | "simulation"
   >("exact");
   const [rangeTolerance, setRangeTolerance] = useState("");
   const [maxPoints, setMaxPoints] = useState("100");
@@ -401,17 +458,50 @@ function AddQuestionForm({
   const [dropOff, setDropOff] = useState("100, 50, 25");
   const [loading, setLoading] = useState(false);
 
+  const [simulationScript, setSimulationScript] = useState("");
+  const [simulationN, setSimulationN] = useState("10000");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isSimulation = answerType === "simulation";
+
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setSimulationScript(ev.target?.result as string);
+      toast.success(`Loaded ${file.name}`);
+    };
+    reader.readAsText(file);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const answerNum = parseFloat(answer);
-    if (isNaN(answerNum)) {
-      toast.error("Answer must be a number");
-      return;
-    }
 
-    if (answerType !== "exact" && !rangeTolerance) {
-      toast.error("Enter a tolerance value for range answers");
-      return;
+    if (isSimulation) {
+      if (!simulationScript.trim()) {
+        toast.error("Upload or paste a simulation script");
+        return;
+      }
+      const n = parseInt(simulationN);
+      if (isNaN(n) || n < 1) {
+        toast.error("Enter a valid number of simulations");
+        return;
+      }
+      if (!rangeTolerance) {
+        toast.error("Enter a tolerance (max range spread)");
+        return;
+      }
+    } else {
+      const answerNum = parseFloat(answer);
+      if (isNaN(answerNum)) {
+        toast.error("Answer must be a number");
+        return;
+      }
+      if (answerType !== "exact" && !rangeTolerance) {
+        toast.error("Enter a tolerance value for range answers");
+        return;
+      }
     }
 
     const points = dropOff
@@ -429,14 +519,20 @@ function AddQuestionForm({
       await addQuestion(sessionId, {
         title,
         description: description || undefined,
-        answer: answerNum,
+        answer: isSimulation ? 0 : parseFloat(answer),
         answerType,
         rangeTolerance: rangeTolerance ? parseFloat(rangeTolerance) : undefined,
         maxPoints: parseInt(maxPoints) || 100,
         maxAttempts: parseInt(maxAttempts) || 3,
         pointsDropOff: points,
+        simulationScript: isSimulation ? simulationScript : undefined,
+        simulationN: isSimulation ? parseInt(simulationN) : undefined,
       });
-      toast.success("Question added");
+      toast.success(
+        isSimulation
+          ? "Simulation question added (click Realize & Activate to run it)"
+          : "Question added"
+      );
       onDone();
     } catch {
       toast.error("Failed to add question");
@@ -464,31 +560,10 @@ function AddQuestionForm({
           onChange={(e) => setDescription(e.target.value)}
         />
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Correct Answer</Label>
-          <Input
-            type="number"
-            step="any"
-            placeholder="e.g. 500000"
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>Max Points</Label>
-          <Input
-            type="number"
-            value={maxPoints}
-            onChange={(e) => setMaxPoints(e.target.value)}
-          />
-        </div>
-      </div>
 
       <div className="space-y-2">
         <Label>Answer Type</Label>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button
             type="button"
             size="sm"
@@ -513,31 +588,144 @@ function AddQuestionForm({
           >
             Range (%)
           </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={answerType === "simulation" ? "default" : "outline"}
+            onClick={() => setAnswerType("simulation")}
+          >
+            Simulation
+          </Button>
         </div>
       </div>
 
-      {answerType !== "exact" && (
-        <div className="space-y-2">
-          <Label>
-            {answerType === "range_percent"
-              ? "Tolerance (%)"
-              : "Tolerance (absolute +/-)"}
-          </Label>
-          <Input
-            type="number"
-            step="any"
-            placeholder={
-              answerType === "range_percent" ? "e.g. 10 for +/-10%" : "e.g. 50"
-            }
-            value={rangeTolerance}
-            onChange={(e) => setRangeTolerance(e.target.value)}
-          />
-          <p className="text-xs text-muted-foreground">
-            {answerType === "range_percent"
-              ? `Teams must submit a range that contains the answer.`
-              : `Teams must submit a range that contains the answer.`}
-          </p>
-        </div>
+      {isSimulation ? (
+        <>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Python Script</Label>
+              <a
+                href="/simulation_template.py"
+                download
+                className="text-xs text-blue-500 hover:underline"
+              >
+                Download template
+              </a>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Upload .py file
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".py"
+                className="hidden"
+                onChange={handleFileUpload}
+              />
+              {simulationScript && (
+                <span className="text-xs text-muted-foreground self-center">
+                  Script loaded ({simulationScript.length} chars)
+                </span>
+              )}
+            </div>
+            <Textarea
+              placeholder="def simulate() -> int:&#10;    return random.randint(1, 100)"
+              value={simulationScript}
+              onChange={(e) => setSimulationScript(e.target.value)}
+              className="font-mono text-sm min-h-[120px]"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Number of simulations (n)</Label>
+              <Input
+                type="number"
+                value={simulationN}
+                onChange={(e) => setSimulationN(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Max Points</Label>
+              <Input
+                type="number"
+                value={maxPoints}
+                onChange={(e) => setMaxPoints(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Range Tolerance (max spread)</Label>
+            <Input
+              type="number"
+              step="any"
+              placeholder="e.g. 5 means players can submit a range 5 wide"
+              value={rangeTolerance}
+              onChange={(e) => setRangeTolerance(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Limits how wide the player's range [min, max] can be. Players score
+              based on the proportion of simulation results that fall in their range.
+            </p>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Correct Answer</Label>
+              <Input
+                type="number"
+                step="any"
+                placeholder="e.g. 500000"
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                required={!isSimulation}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Max Points</Label>
+              <Input
+                type="number"
+                value={maxPoints}
+                onChange={(e) => setMaxPoints(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {answerType !== "exact" && (
+            <div className="space-y-2">
+              <Label>
+                {answerType === "range_percent"
+                  ? "Tolerance (%)"
+                  : "Tolerance (absolute +/-)"}
+              </Label>
+              <Input
+                type="number"
+                step="any"
+                placeholder={
+                  answerType === "range_percent"
+                    ? "e.g. 10 for +/-10%"
+                    : "e.g. 50"
+                }
+                value={rangeTolerance}
+                onChange={(e) => setRangeTolerance(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                {answerType === "range_percent"
+                  ? `Teams must submit a range that contains the answer.`
+                  : `Teams must submit a range that contains the answer.`}
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       <div className="grid grid-cols-2 gap-4">
@@ -559,10 +747,19 @@ function AddQuestionForm({
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
-        Points drop-off is a comma-separated list. 1st attempt gets the first
-        value, 2nd attempt gets the second, etc.
+        {isSimulation
+          ? "Points drop-off: each attempt's max possible points. Score = proportion of hits * drop-off value."
+          : "Points drop-off is a comma-separated list. 1st attempt gets the first value, 2nd attempt gets the second, etc."}
       </p>
-      <Button type="submit" className="w-full" disabled={loading || !title || !answer}>
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={
+          loading ||
+          !title ||
+          (isSimulation ? !simulationScript : !answer)
+        }
+      >
         {loading ? "Adding..." : "Add Question"}
       </Button>
     </form>

@@ -42,11 +42,14 @@ export const questions = sqliteTable("questions", {
   description: text("description"),
   answer: real("answer").notNull(),
   answerType: text("answer_type", {
-    enum: ["exact", "range_absolute", "range_percent"],
+    enum: ["exact", "range_absolute", "range_percent", "simulation"],
   })
     .notNull()
     .default("exact"),
   rangeTolerance: real("range_tolerance"),
+  simulationScript: text("simulation_script"),
+  simulationN: integer("simulation_n"),
+  simulationResults: text("simulation_results"),
   maxPoints: integer("max_points").notNull().default(100),
   maxAttempts: integer("max_attempts").notNull().default(3),
   pointsDropOff: text("points_drop_off").notNull().default("[100,50,25]"),

@@ -17,6 +17,16 @@ sqlite.pragma("foreign_keys = ON");
 
 export const db = drizzle(sqlite, { schema });
 
+try {
+  sqlite.exec(`ALTER TABLE questions ADD COLUMN simulation_script TEXT`);
+} catch {}
+try {
+  sqlite.exec(`ALTER TABLE questions ADD COLUMN simulation_n INTEGER`);
+} catch {}
+try {
+  sqlite.exec(`ALTER TABLE questions ADD COLUMN simulation_results TEXT`);
+} catch {}
+
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,

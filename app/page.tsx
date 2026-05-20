@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,8 +13,22 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { createSession, getSessionByCode } from "@/lib/actions/sessions";
+import {
+  createSession,
+  getSessionByCode,
+  getActiveSessions,
+  deleteExpiredSessions,
+} from "@/lib/actions/sessions";
+
+type ActiveSession = {
+  id: string;
+  name: string;
+  joinCode: string;
+  status: string;
+  createdAt: Date;
+};
 
 export default function Home() {
   const router = useRouter();
@@ -22,8 +36,14 @@ export default function Home() {
   const [sessionName, setSessionName] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
 
-  async function handleJoin(e: React.FormEvent) {
+  useEffect(() => {
+    deleteExpiredSessions();
+    getActiveSessions().then(setActiveSessions);
+  }, []);
+
+  async function handleJoin(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!joinCode.trim()) return;
     setLoading(true);
@@ -41,7 +61,7 @@ export default function Home() {
     }
   }
 
-  async function handleCreate(e: React.FormEvent) {
+  async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!sessionName.trim() || !adminPassword.trim()) return;
     setLoading(true);
@@ -58,6 +78,21 @@ export default function Home() {
       setLoading(false);
     }
   }
+
+  function formatTimeAgo(date: Date) {
+    const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+    if (seconds < 60) return "just now";
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ago`;
+  }
+
+  const statusColor: Record<string, string> = {
+    lobby: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
+    active: "bg-green-500/20 text-green-400 border-green-500/30",
+    finished: "bg-muted text-muted-foreground",
+  };
 
   return (
     <div className="flex flex-1 items-center justify-center p-4">
@@ -155,6 +190,45 @@ export default function Home() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {activeSessions.length > 0 && (
+          <div className="space-y-3">
+            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+              Active Sessions
+            </h2>
+            <div className="space-y-2">
+              {activeSessions.map((session) => (
+                <Card
+                  key={session.id}
+                  className="cursor-pointer transition-colors hover:bg-accent/50"
+                  onClick={() => router.push(`/join/${session.joinCode}`)}
+                >
+                  <CardContent className="flex items-center justify-between py-3">
+                    <div className="space-y-1">
+                      <p className="font-medium leading-none">
+                        {session.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatTimeAgo(session.createdAt)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant="outline"
+                        className={statusColor[session.status] ?? ""}
+                      >
+                        {session.status}
+                      </Badge>
+                      <span className="font-mono text-sm text-muted-foreground">
+                        {session.joinCode}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -4,6 +4,10 @@ import { db } from "@/lib/db";
 import { questions } from "@/lib/db/schema";
 import { generateId } from "@/lib/utils";
 import { eq } from "drizzle-orm";
+import { execSync } from "child_process";
+import { writeFileSync, unlinkSync } from "fs";
+import { tmpdir } from "os";
+import path from "path";
 
 export async function addQuestion(
   sessionId: string,
@@ -11,11 +15,13 @@ export async function addQuestion(
     title: string;
     description?: string;
     answer: number;
-    answerType: "exact" | "range_absolute" | "range_percent";
+    answerType: "exact" | "range_absolute" | "range_percent" | "simulation";
     rangeTolerance?: number;
     maxPoints: number;
     maxAttempts: number;
     pointsDropOff: number[];
+    simulationScript?: string;
+    simulationN?: number;
   }
 ) {
   const existing = db
@@ -25,25 +31,89 @@ export async function addQuestion(
     .all();
 
   const id = generateId();
+  const isSimulation = data.answerType === "simulation";
+
   db.insert(questions)
     .values({
       id,
       sessionId,
       title: data.title,
       description: data.description || null,
-      answer: data.answer,
+      answer: isSimulation ? 0 : data.answer,
       answerType: data.answerType,
       rangeTolerance: data.rangeTolerance ?? null,
       maxPoints: data.maxPoints,
       maxAttempts: data.maxAttempts,
       pointsDropOff: JSON.stringify(data.pointsDropOff),
-      status: "active",
+      status: isSimulation ? "hidden" : "active",
       sortOrder: existing.length,
+      simulationScript: isSimulation ? (data.simulationScript || null) : null,
+      simulationN: isSimulation ? (data.simulationN || null) : null,
+      simulationResults: null,
       createdAt: new Date(),
     })
     .run();
 
   return { id };
+}
+
+export async function realizeSimulation(questionId: string) {
+  const question = db
+    .select()
+    .from(questions)
+    .where(eq(questions.id, questionId))
+    .get();
+
+  if (!question) return { error: "Question not found" };
+  if (question.answerType !== "simulation")
+    return { error: "Not a simulation question" };
+  if (!question.simulationScript || !question.simulationN)
+    return { error: "Missing simulation script or n" };
+
+  const tmpFile = path.join(tmpdir(), `sim_${questionId}_${Date.now()}.py`);
+
+  const runnerScript = `import json
+import sys
+
+${question.simulationScript}
+
+n = ${question.simulationN}
+results = []
+for i in range(n):
+    results.append(int(simulate()))
+print(json.dumps(results))
+`;
+
+  try {
+    writeFileSync(tmpFile, runnerScript);
+    const output = execSync(`python3 "${tmpFile}"`, {
+      timeout: 60000,
+      encoding: "utf-8",
+    });
+    const results: number[] = JSON.parse(output.trim());
+
+    db.update(questions)
+      .set({
+        simulationResults: JSON.stringify(results),
+        status: "active",
+      })
+      .where(eq(questions.id, questionId))
+      .run();
+
+    return {
+      success: true,
+      resultCount: results.length,
+      min: Math.min(...results),
+      max: Math.max(...results),
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { error: `Simulation failed: ${message}` };
+  } finally {
+    try {
+      unlinkSync(tmpFile);
+    } catch {}
+  }
 }
 
 export async function updateQuestionStatus(

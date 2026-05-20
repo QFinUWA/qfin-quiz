@@ -21,7 +21,7 @@ type Question = {
   id: string;
   title: string;
   description: string | null;
-  answerType: "exact" | "range_absolute" | "range_percent";
+  answerType: "exact" | "range_absolute" | "range_percent" | "simulation";
   rangeTolerance: number | null;
   maxPoints: number;
   maxAttempts: number;
@@ -39,6 +39,9 @@ type Question = {
     isCorrect: boolean;
     pointsAwarded: number;
   }[];
+  simulationResultCount?: number;
+  simulationMin?: number;
+  simulationMax?: number;
 };
 
 export default function PlayPage({
@@ -105,7 +108,10 @@ export default function PlayPage({
         return;
       }
 
-      if (result.isCorrect) {
+      const q = questions.find((q) => q.id === questionId);
+      if (q?.answerType === "simulation") {
+        toast.success(`+${result.pointsAwarded} points`);
+      } else if (result.isCorrect) {
         toast.success(`Correct! +${result.pointsAwarded} points`);
       } else {
         toast.error(
@@ -179,19 +185,71 @@ function QuestionCard({
   submitting: boolean;
 }) {
   const isExact = question.answerType === "exact";
+  const isSimulation = question.answerType === "simulation";
+  const showRange = !isExact;
   const [answer, setAnswer] = useState("");
   const [rangeMin, setRangeMin] = useState("");
   const [rangeMax, setRangeMax] = useState("");
 
+  function handleMinChange(val: string) {
+    setRangeMin(val);
+    if (rangeMax) return;
+    const num = parseFloat(val);
+    if (isNaN(num) || question.rangeTolerance === null) return;
+    if (question.answerType === "range_percent") {
+      setRangeMax(String(+(num * (1 + question.rangeTolerance / 100)).toFixed(2)));
+    } else {
+      setRangeMax(String(+(num + question.rangeTolerance).toFixed(2)));
+    }
+  }
+
+  function handleMaxChange(val: string) {
+    setRangeMax(val);
+    if (rangeMin) return;
+    const num = parseFloat(val);
+    if (isNaN(num) || question.rangeTolerance === null) return;
+    if (question.answerType === "range_percent") {
+      setRangeMin(String(+(num / (1 + question.rangeTolerance / 100)).toFixed(2)));
+    } else {
+      setRangeMin(String(+(num - question.rangeTolerance).toFixed(2)));
+    }
+  }
+
+  const min = parseFloat(rangeMin);
+  const max = parseFloat(rangeMax);
+  let rangeError: string | null = null;
+  if (showRange && rangeMin && rangeMax && !isNaN(min) && !isNaN(max)) {
+    if (min > max) {
+      rangeError = "Min must be less than max";
+    } else if (question.rangeTolerance !== null) {
+      if (
+        (question.answerType === "range_absolute" ||
+          question.answerType === "simulation") &&
+        max - min > question.rangeTolerance
+      ) {
+        rangeError = `Range too wide. Max spread: ${question.rangeTolerance}`;
+      } else if (
+        question.answerType === "range_percent" &&
+        max > min * (1 + question.rangeTolerance / 100)
+      ) {
+        rangeError = `Range too wide. Upper bound can be at most ${question.rangeTolerance}% above lower bound`;
+      }
+    }
+  }
+
   const attemptsLeft = question.maxAttempts - question.attemptsUsed;
   const canSubmit =
-    !question.hasCorrect &&
+    (isSimulation || !question.hasCorrect) &&
     attemptsLeft > 0 &&
     question.status === "active";
   const nextPoints =
     question.pointsDropOff[question.attemptsUsed] ??
     question.pointsDropOff[question.pointsDropOff.length - 1] ??
     0;
+
+  const totalSimPoints = isSimulation
+    ? question.submissions.reduce((sum, s) => sum + s.pointsAwarded, 0)
+    : 0;
 
   function handleFormSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -214,12 +272,23 @@ function QuestionCard({
         return;
       }
       if (question.rangeTolerance !== null) {
-        if (question.answerType === "range_absolute" && (max - min) > question.rangeTolerance) {
-          toast.error(`Range too wide. Max spread: ${question.rangeTolerance}`);
+        if (
+          (question.answerType === "range_absolute" ||
+            question.answerType === "simulation") &&
+          max - min > question.rangeTolerance
+        ) {
+          toast.error(
+            `Range too wide. Max spread: ${question.rangeTolerance}`
+          );
           return;
         }
-        if (question.answerType === "range_percent" && max > min * (1 + question.rangeTolerance / 100)) {
-          toast.error(`Range too wide. Upper bound can be at most ${question.rangeTolerance}% above lower bound`);
+        if (
+          question.answerType === "range_percent" &&
+          max > min * (1 + question.rangeTolerance / 100)
+        ) {
+          toast.error(
+            `Range too wide. Upper bound can be at most ${question.rangeTolerance}% above lower bound`
+          );
           return;
         }
       }
@@ -230,8 +299,9 @@ function QuestionCard({
     setRangeMax("");
   }
 
-  const answerTypeLabel =
-    question.answerType === "exact"
+  const answerTypeLabel = isSimulation
+    ? `Simulation - submit a range (max spread: ${question.rangeTolerance}). Score = proportion of ${question.simulationResultCount ?? "?"} results in your range.`
+    : question.answerType === "exact"
       ? "Exact answer"
       : question.answerType === "range_percent"
         ? `Range answer - upper bound can be at most ${question.rangeTolerance}% above lower bound`
@@ -240,11 +310,13 @@ function QuestionCard({
   return (
     <Card
       className={
-        question.hasCorrect
+        !isSimulation && question.hasCorrect
           ? "border-green-500/50"
-          : attemptsLeft === 0
+          : !isSimulation && attemptsLeft === 0
             ? "border-red-500/50 opacity-75"
-            : ""
+            : isSimulation && question.attemptsUsed > 0
+              ? "border-blue-500/50"
+              : ""
       }
     >
       <CardHeader>
@@ -261,7 +333,15 @@ function QuestionCard({
             </p>
           </div>
           <div className="flex flex-col items-end gap-1">
-            {question.hasCorrect ? (
+            {isSimulation ? (
+              question.attemptsUsed > 0 ? (
+                <Badge className="bg-blue-600">
+                  {totalSimPoints} pts
+                </Badge>
+              ) : (
+                <Badge variant="outline">up to {nextPoints} pts</Badge>
+              )
+            ) : question.hasCorrect ? (
               <Badge className="bg-green-600">
                 +
                 {question.submissions.find((s) => s.isCorrect)
@@ -275,7 +355,7 @@ function QuestionCard({
             ) : (
               <Badge variant="outline">{nextPoints} pts</Badge>
             )}
-            {!question.hasCorrect && question.status === "active" && (
+            {canSubmit && (
               <span className="text-xs text-muted-foreground">
                 {attemptsLeft}/{question.maxAttempts} attempts left
               </span>
@@ -287,7 +367,33 @@ function QuestionCard({
       {canSubmit && (
         <CardContent>
           <form onSubmit={handleFormSubmit} className="space-y-3">
-            {isExact ? (
+            {showRange ? <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Min</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    placeholder="Lower bound"
+                    value={rangeMin}
+                    onChange={(e) => handleMinChange(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Max</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    placeholder="Upper bound"
+                    value={rangeMax}
+                    onChange={(e) => handleMaxChange(e.target.value)}
+                  />
+                </div>
+              </div>
+              {rangeError && (
+                <p className="text-sm text-red-500 col-span-2">{rangeError}</p>
+              )}
+            </> : (
               <div className="space-y-2">
                 <Label>Your Answer</Label>
                 <Input
@@ -298,32 +404,9 @@ function QuestionCard({
                   onChange={(e) => setAnswer(e.target.value)}
                 />
               </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>Min</Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    placeholder="Lower bound"
-                    value={rangeMin}
-                    onChange={(e) => setRangeMin(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Max</Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    placeholder="Upper bound"
-                    value={rangeMax}
-                    onChange={(e) => setRangeMax(e.target.value)}
-                  />
-                </div>
-              </div>
             )}
 
-            <Button type="submit" className="w-full" disabled={submitting}>
+            <Button type="submit" className="w-full" disabled={submitting || !!rangeError}>
               {submitting ? "Submitting..." : "Submit Answer"}
             </Button>
           </form>
@@ -336,13 +419,26 @@ function QuestionCard({
           {question.submissions.map((s, i) => (
             <div
               key={i}
-              className={`text-sm ${s.isCorrect ? "text-green-500" : "text-red-400"}`}
+              className={`text-sm ${
+                isSimulation
+                  ? s.pointsAwarded > 0
+                    ? "text-blue-500"
+                    : "text-muted-foreground"
+                  : s.isCorrect
+                    ? "text-green-500"
+                    : "text-red-400"
+              }`}
             >
               #{s.attemptNumber}:{" "}
               {s.submissionType === "number"
                 ? s.answerValue
                 : `[${s.rangeMin}, ${s.rangeMax}]`}{" "}
-              - {s.isCorrect ? `+${s.pointsAwarded}` : "incorrect"}
+              -{" "}
+              {isSimulation
+                ? `+${s.pointsAwarded} pts`
+                : s.isCorrect
+                  ? `+${s.pointsAwarded}`
+                  : "incorrect"}
             </div>
           ))}
         </CardFooter>

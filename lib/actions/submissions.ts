@@ -43,10 +43,35 @@ export async function submitAnswer(data: {
     dropOff[attemptNumber - 1] ?? dropOff[dropOff.length - 1] ?? 0;
 
   let isCorrect = false;
+  let pointsAwarded = 0;
   const answerType = question.answerType || "exact";
 
-  if (answerType === "exact") {
+  if (answerType === "simulation") {
+    if (data.rangeMin === undefined || data.rangeMax === undefined) {
+      return { error: "Range values required" };
+    }
+
+    const tolerance = question.rangeTolerance ?? Infinity;
+    const spread = data.rangeMax - data.rangeMin;
+    if (spread > tolerance) {
+      return { error: `Range too wide. Max spread: ${tolerance}` };
+    }
+
+    const results: number[] = JSON.parse(question.simulationResults || "[]");
+    if (results.length === 0) {
+      return { error: "Simulation not yet realized" };
+    }
+
+    const hits = results.filter(
+      (r) => r >= data.rangeMin! && r <= data.rangeMax!
+    ).length;
+    const proportion = hits / results.length;
+
+    pointsAwarded = Math.round(proportion * pointsForAttempt);
+    isCorrect = false;
+  } else if (answerType === "exact") {
     isCorrect = data.answerValue === question.answer;
+    pointsAwarded = isCorrect ? pointsForAttempt : 0;
   } else {
     if (data.rangeMin === undefined || data.rangeMax === undefined) {
       return { error: "Range values required" };
@@ -61,16 +86,16 @@ export async function submitAnswer(data: {
     if (answerType === "range_percent") {
       const maxAllowed = data.rangeMin * (1 + tolerance / 100);
       if (data.rangeMax > maxAllowed) {
-        return { error: `Range too wide. Upper bound can be at most ${tolerance}% above lower bound` };
+        return {
+          error: `Range too wide. Upper bound can be at most ${tolerance}% above lower bound`,
+        };
       }
     }
 
     isCorrect =
-      data.rangeMin <= question.answer &&
-      data.rangeMax >= question.answer;
+      data.rangeMin <= question.answer && data.rangeMax >= question.answer;
+    pointsAwarded = isCorrect ? pointsForAttempt : 0;
   }
-
-  const pointsAwarded = isCorrect ? pointsForAttempt : 0;
 
   const id = generateId();
   db.insert(submissions)

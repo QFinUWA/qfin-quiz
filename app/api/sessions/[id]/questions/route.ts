@@ -39,6 +39,18 @@ export async function GET(
 
       const hasCorrect = teamSubmissions.some((s) => s.isCorrect);
 
+      const isSimulation = q.answerType === "simulation";
+      let simulationResultCount: number | undefined;
+      let simulationMin: number | undefined;
+      let simulationMax: number | undefined;
+
+      if (isSimulation && q.simulationResults) {
+        const results: number[] = JSON.parse(q.simulationResults);
+        simulationResultCount = results.length;
+        simulationMin = Math.min(...results);
+        simulationMax = Math.max(...results);
+      }
+
       return {
         id: q.id,
         title: q.title,
@@ -53,6 +65,9 @@ export async function GET(
         attemptsUsed: teamSubmissions.length,
         hasCorrect,
         submissions: teamSubmissions,
+        simulationResultCount,
+        simulationMin,
+        simulationMax,
       };
     });
 
