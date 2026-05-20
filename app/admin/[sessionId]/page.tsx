@@ -1034,15 +1034,28 @@ function DetailsDialog({
                 </p>
                 <div className="h-48 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={histData!}>
+                    <BarChart data={histData!} margin={{ top: 4, right: 4, bottom: 0, left: -16 }}>
                       <XAxis
                         dataKey="range"
-                        tick={{ fontSize: 10 }}
+                        tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                         interval="preserveStartEnd"
+                        stroke="hsl(var(--border))"
                       />
-                      <YAxis tick={{ fontSize: 10 }} />
-                      <Tooltip />
-                      <Bar dataKey="count" fill="hsl(var(--primary))" />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                        stroke="hsl(var(--border))"
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--popover))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "6px",
+                          color: "hsl(var(--popover-foreground))",
+                          fontSize: 12,
+                        }}
+                        cursor={{ fill: "hsl(var(--accent))" }}
+                      />
+                      <Bar dataKey="count" fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
