@@ -1110,6 +1110,7 @@ function DetailsDialog({
   const [dropOff, setDropOff] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const questionId = question?.id ?? null;
   useEffect(() => {
     if (question && open) {
       setTitle(question.title);
@@ -1123,7 +1124,8 @@ function DetailsDialog({
       setDropOff(question.pointsDropOff.replace(/[\[\]]/g, ""));
       setEditing(startEditing);
     }
-  }, [question, open, startEditing]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questionId, open, startEditing]);
 
   if (!question) return null;
 
