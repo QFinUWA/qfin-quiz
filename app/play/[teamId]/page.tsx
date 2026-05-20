@@ -354,9 +354,18 @@ function QuestionCard({
               <Badge variant="outline">{nextPoints} pts</Badge>
             )}
             {canSubmit && (
-              <span className="text-xs text-muted-foreground">
-                {attemptsLeft}/{question.maxAttempts} attempts left
-              </span>
+              <>
+                <span className="text-xs text-muted-foreground">
+                  {attemptsLeft}/{question.maxAttempts} attempts left
+                </span>
+                <span className="text-xs text-muted-foreground/70">
+                  {question.pointsDropOff.map((p, i) => (
+                    <span key={i} className={i === question.attemptsUsed ? "text-foreground font-medium" : ""}>
+                      {i > 0 && " / "}{p}
+                    </span>
+                  ))} pts
+                </span>
+              </>
             )}
           </div>
         </div>
