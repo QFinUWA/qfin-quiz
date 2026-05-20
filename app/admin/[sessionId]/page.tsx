@@ -854,13 +854,18 @@ function AddQuestionForm({
   );
 }
 
-function buildHistogramData(results: number[], buckets = 30) {
+function buildHistogramData(results: number[]) {
   const min = Math.min(...results);
   const max = Math.max(...results);
   if (min === max) return [{ range: String(min), count: results.length }];
+  const range = max - min;
+  const allIntegers = results.every((v) => Number.isInteger(v));
+  const buckets = allIntegers && range <= 40 ? range + 1 : Math.min(25, Math.ceil(Math.sqrt(results.length)));
   const step = (max - min) / buckets;
   const bins = Array.from({ length: buckets }, (_, i) => ({
-    range: `${(min + i * step).toFixed(1)}`,
+    range: allIntegers && range <= 40
+      ? String(min + i)
+      : Number((min + i * step).toPrecision(3)),
     count: 0,
   }));
   for (const v of results) {
@@ -1043,30 +1048,34 @@ function DetailsDialog({
                 <p className="text-sm font-medium">
                   Simulation: {simResults.length} results [{Math.min(...simResults)}, {Math.max(...simResults)}]
                 </p>
-                <div className="h-48 w-full">
+                <div className="h-52 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={histData!} margin={{ top: 4, right: 4, bottom: 0, left: -16 }}>
+                    <BarChart data={histData!} margin={{ top: 8, right: 8, bottom: 0, left: -12 }} barCategoryGap={0} barGap={0}>
                       <XAxis
                         dataKey="range"
-                        tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                        tick={{ fontSize: 10, fill: "#a1a1aa" }}
                         interval="preserveStartEnd"
-                        stroke="hsl(var(--border))"
+                        stroke="#3f3f46"
+                        tickLine={false}
                       />
                       <YAxis
-                        tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                        stroke="hsl(var(--border))"
+                        tick={{ fontSize: 10, fill: "#a1a1aa" }}
+                        stroke="#3f3f46"
+                        tickLine={false}
+                        axisLine={false}
                       />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: "hsl(var(--popover))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "6px",
-                          color: "hsl(var(--popover-foreground))",
+                          backgroundColor: "#27272a",
+                          border: "1px solid #3f3f46",
+                          borderRadius: "8px",
+                          color: "#fafafa",
                           fontSize: 12,
+                          padding: "6px 10px",
                         }}
-                        cursor={{ fill: "hsl(var(--accent))" }}
+                        cursor={{ fill: "rgba(255,255,255,0.05)" }}
                       />
-                      <Bar dataKey="count" fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} />
+                      <Bar dataKey="count" fill="#3b82f6" radius={[2, 2, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
