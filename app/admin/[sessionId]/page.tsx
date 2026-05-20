@@ -702,7 +702,7 @@ function AddQuestionForm({
               placeholder="def simulate() -> int:&#10;    return random.randint(1, 100)"
               value={simulationScript}
               onChange={(e) => setSimulationScript(e.target.value)}
-              className="font-mono text-sm min-h-[120px] max-h-[40vh]"
+              className="font-mono text-sm min-h-[120px] max-h-[40vh] overflow-y-auto resize-none"
             />
           </div>
 
