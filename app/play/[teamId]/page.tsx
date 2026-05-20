@@ -191,8 +191,8 @@ export default function PlayPage({
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col lg:flex-row">
-        <main className="flex-1 p-4 max-w-2xl mx-auto w-full space-y-4 lg:mx-0 lg:ml-auto lg:mr-4">
+      <div className="flex-1 flex justify-center relative">
+        <main className="flex-1 p-4 max-w-2xl w-full space-y-4">
           {sessionStatus === "finished" && questions.length > 0 && (
             <div className="bg-muted rounded-lg px-4 py-3 text-center">
               <p className="font-medium">Session ended</p>
@@ -230,31 +230,23 @@ export default function PlayPage({
         </main>
 
         {leaderboard.length > 0 && (
-          <aside className="lg:w-64 lg:shrink-0 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto p-4 lg:pt-4 lg:pl-0 lg:border-l">
-            <Card>
-              <CardHeader className="pb-2 pt-4 px-4">
-                <CardTitle className="text-sm">Leaderboard</CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-3">
-                <div className="space-y-1">
-                  {leaderboard.map((entry, i) => (
-                    <div
-                      key={entry.teamId}
-                      className={`flex items-center justify-between text-sm py-1 px-2 rounded ${
-                        entry.teamId === teamId ? "bg-muted font-medium" : ""
-                      }`}
-                    >
-                      <span>
-                        <span className="text-muted-foreground w-5 inline-block">{i + 1}.</span>{" "}
-                        {entry.teamName}
-                        {entry.teamId === teamId && <span className="text-xs text-muted-foreground ml-1">(you)</span>}
-                      </span>
-                      <span className="font-mono tabular-nums">{entry.totalPoints}</span>
-                    </div>
-                  ))}
+          <aside className="hidden lg:block fixed right-4 top-16 w-48">
+            <p className="text-xs text-muted-foreground mb-2">Leaderboard</p>
+            <div className="space-y-0.5">
+              {leaderboard.map((entry, i) => (
+                <div
+                  key={entry.teamId}
+                  className={`flex items-center justify-between text-xs py-0.5 ${
+                    entry.teamId === teamId ? "text-foreground font-medium" : "text-muted-foreground"
+                  }`}
+                >
+                  <span className="truncate mr-2">
+                    {i + 1}. {entry.teamName}
+                  </span>
+                  <span className="font-mono tabular-nums shrink-0">{entry.totalPoints}</span>
                 </div>
-              </CardContent>
-            </Card>
+              ))}
+            </div>
           </aside>
         )}
       </div>
