@@ -30,9 +30,9 @@ export async function verifyAdmin(sessionId: string, password: string) {
     .where(eq(sessions.id, sessionId))
     .get();
 
-  if (!session) return null;
-  if (session.adminPassword !== password) return null;
-  return session;
+  if (!session) return false;
+  if (session.adminPassword !== password) return false;
+  return true;
 }
 
 export async function getSession(sessionId: string) {
