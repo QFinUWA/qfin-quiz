@@ -209,21 +209,10 @@ export default function Home() {
                         {session.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatTimeAgo(session.createdAt)}
+                        {formatTimeAgo(session.createdAt)} - tap to join
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs h-6 px-2"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push(`/admin/${session.id}`);
-                        }}
-                      >
-                        Admin
-                      </Button>
                       <Badge
                         variant="outline"
                         className={statusColor[session.status] ?? ""}
@@ -233,6 +222,15 @@ export default function Home() {
                       <span className="font-mono text-sm text-muted-foreground">
                         {session.joinCode}
                       </span>
+                      <button
+                        className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground ml-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/admin/${session.id}`);
+                        }}
+                      >
+                        admin
+                      </button>
                     </div>
                   </CardContent>
                 </Card>
