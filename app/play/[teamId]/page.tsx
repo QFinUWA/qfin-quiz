@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, use } from "react";
+import { useState, useEffect, useCallback, useRef, use } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -191,10 +191,24 @@ function QuestionCard({
   const [answer, setAnswer] = useState("");
   const [rangeMin, setRangeMin] = useState("");
   const [rangeMax, setRangeMax] = useState("");
+  const minTouched = useRef(false);
+  const maxTouched = useRef(false);
+  const autoFillMax = useRef(true);
+  const autoFillMin = useRef(true);
+
+  function handleMinFocus() {
+    minTouched.current = true;
+    autoFillMax.current = !maxTouched.current;
+  }
+
+  function handleMaxFocus() {
+    maxTouched.current = true;
+    autoFillMin.current = !minTouched.current;
+  }
 
   function handleMinChange(val: string) {
     setRangeMin(val);
-    if (rangeMax) return;
+    if (!autoFillMax.current) return;
     const num = parseFloat(val);
     if (isNaN(num) || question.rangeTolerance === null) return;
     if (question.answerType === "range_percent") {
@@ -206,7 +220,7 @@ function QuestionCard({
 
   function handleMaxChange(val: string) {
     setRangeMax(val);
-    if (rangeMin) return;
+    if (!autoFillMin.current) return;
     const num = parseFloat(val);
     if (isNaN(num) || question.rangeTolerance === null) return;
     if (question.answerType === "range_percent") {
@@ -273,6 +287,10 @@ function QuestionCard({
     setAnswer("");
     setRangeMin("");
     setRangeMax("");
+    minTouched.current = false;
+    maxTouched.current = false;
+    autoFillMax.current = true;
+    autoFillMin.current = true;
   }
 
   const answerTypeLabel = isSimulation
@@ -356,6 +374,7 @@ function QuestionCard({
                     step="any"
                     placeholder="Lower bound"
                     value={rangeMin}
+                    onFocus={handleMinFocus}
                     onChange={(e) => handleMinChange(e.target.value)}
                   />
                 </div>
@@ -366,6 +385,7 @@ function QuestionCard({
                     step="any"
                     placeholder="Upper bound"
                     value={rangeMax}
+                    onFocus={handleMaxFocus}
                     onChange={(e) => handleMaxChange(e.target.value)}
                   />
                 </div>

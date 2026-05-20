@@ -33,6 +33,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { toast } from "sonner";
 import {
   verifyAdmin,
@@ -41,6 +49,7 @@ import {
 } from "@/lib/actions/sessions";
 import {
   addQuestion,
+  updateQuestion,
   updateQuestionStatus,
   deleteQuestion,
   realizeSimulation,
@@ -60,9 +69,9 @@ export default function AdminPage({
   const [data, setData] = useState<SessionData | null>(null);
   const [addingQuestion, setAddingQuestion] = useState(false);
   const [realizing, setRealizing] = useState<string | null>(null);
-  const [showAnswer, setShowAnswer] = useState<Set<string>>(new Set());
+  const [detailsQuestion, setDetailsQuestion] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{
-    type: "close" | "reveal" | "reveal-all";
+    type: "close" | "reveal" | "reveal-all" | "delete";
     questionId?: string;
     title: string;
   } | null>(null);
@@ -191,6 +200,13 @@ export default function AdminPage({
           </div>
           <div className="flex gap-2">
             <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push("/")}
+            >
+              &larr; Back
+            </Button>
+            <Button
               variant="outline"
               size="sm"
               onClick={() => router.push(`/leaderboard/${sessionId}`)}
@@ -272,14 +288,20 @@ export default function AdminPage({
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {confirmAction?.type === "close" ? "Close Question" : "Reveal Answer"}
+                {confirmAction?.type === "close"
+                  ? "Close Question"
+                  : confirmAction?.type === "delete"
+                    ? "Delete Question"
+                    : "Reveal Answer"}
               </DialogTitle>
               <DialogDescription>
                 {confirmAction?.type === "reveal-all"
                   ? "This will reveal answers for ALL questions. This cannot be undone."
                   : confirmAction?.type === "reveal"
                     ? `Reveal the answer for "${confirmAction.title}"? This cannot be undone.`
-                    : `Close "${confirmAction?.title}"? Players will no longer be able to submit answers.`}
+                    : confirmAction?.type === "delete"
+                      ? `Delete "${confirmAction?.title}"? This cannot be undone.`
+                      : `Close "${confirmAction?.title}"? Players will no longer be able to submit answers.`}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -298,16 +320,25 @@ export default function AdminPage({
                     await updateQuestionStatus(confirmAction.questionId, "revealed");
                   } else if (confirmAction.type === "close" && confirmAction.questionId) {
                     await updateQuestionStatus(confirmAction.questionId, "closed");
+                  } else if (confirmAction.type === "delete" && confirmAction.questionId) {
+                    await deleteQuestion(confirmAction.questionId);
                   }
                   setConfirmAction(null);
                   fetchData();
                 }}
               >
-                {confirmAction?.type === "close" ? "Close" : "Reveal"}
+                {confirmAction?.type === "close" ? "Close" : confirmAction?.type === "delete" ? "Delete" : "Reveal"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Details Dialog */}
+        <DetailsDialog
+          question={data.questions.find((q) => q.id === detailsQuestion) ?? null}
+          open={!!detailsQuestion}
+          onClose={() => setDetailsQuestion(null)}
+        />
 
         {/* Questions */}
         <Card>
@@ -361,11 +392,6 @@ export default function AdminPage({
                   qSubs.filter((s) => s.isCorrect).map((s) => s.teamId)
                 ).size;
                 const isSim = q.answerSource === "simulation";
-                const simResults: number[] | null =
-                  isSim && q.simulationResults
-                    ? JSON.parse(q.simulationResults)
-                    : null;
-                const answerVisible = showAnswer.has(q.id);
 
                 const responseLabel =
                   q.answerType === "exact"
@@ -387,31 +413,9 @@ export default function AdminPage({
                         <div className="text-sm text-muted-foreground mt-1 space-y-0.5">
                           <p>
                             {isSim ? "Simulation" : "Point"} | {responseLabel}{" "}
-                            {!isSim && (
-                              answerVisible
-                                ? <>| Answer: <span className="font-mono">{q.answer}</span>{" "}
-                                    <button
-                                      type="button"
-                                      className="text-xs underline text-muted-foreground hover:text-foreground"
-                                      onClick={() => setShowAnswer((prev) => { const next = new Set(prev); next.delete(q.id); return next; })}
-                                    >hide</button>
-                                  </>
-                                : <>| <button
-                                      type="button"
-                                      className="text-xs underline text-muted-foreground hover:text-foreground"
-                                      onClick={() => setShowAnswer((prev) => new Set(prev).add(q.id))}
-                                    >Show answer</button>
-                                  </>
-                            )}{" "}
                             | Max: {q.maxPoints}pts | Attempts: {q.maxAttempts}{" "}
                             | Drop-off: {q.pointsDropOff}
                           </p>
-                          {isSim && (
-                            <p>
-                              n={q.simulationN}
-                              {simResults && <> | {simResults.length} results [{Math.min(...simResults)}, {Math.max(...simResults)}]</>}
-                            </p>
-                          )}
                           <p>
                             {teamsAttempted} teams attempted
                             {!isSim && <>, {teamsCorrect} correct</>}
@@ -432,6 +436,13 @@ export default function AdminPage({
                     </div>
                     <Separator />
                     <div className="flex gap-2 flex-wrap">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setDetailsQuestion(q.id)}
+                      >
+                        Details
+                      </Button>
                       {q.status === "hidden" && isSim && (
                         <Button
                           size="sm"
@@ -487,18 +498,15 @@ export default function AdminPage({
                           Reveal Answer
                         </Button>
                       )}
-                      {q.status === "hidden" && (
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={async () => {
-                            await deleteQuestion(q.id);
-                            fetchData();
-                          }}
-                        >
-                          Delete
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() =>
+                          setConfirmAction({ type: "delete", questionId: q.id, title: q.title })
+                        }
+                      >
+                        Delete
+                      </Button>
                     </div>
                   </div>
                 );
@@ -834,5 +842,221 @@ function AddQuestionForm({
         {loading ? "Adding..." : "Add Question"}
       </Button>
     </form>
+  );
+}
+
+function buildHistogramData(results: number[], buckets = 30) {
+  const min = Math.min(...results);
+  const max = Math.max(...results);
+  if (min === max) return [{ range: String(min), count: results.length }];
+  const step = (max - min) / buckets;
+  const bins = Array.from({ length: buckets }, (_, i) => ({
+    range: `${(min + i * step).toFixed(1)}`,
+    count: 0,
+  }));
+  for (const v of results) {
+    const idx = Math.min(Math.floor((v - min) / step), buckets - 1);
+    bins[idx].count++;
+  }
+  return bins;
+}
+
+type QuestionRow = NonNullable<SessionData>["questions"][number];
+
+function DetailsDialog({
+  question,
+  open,
+  onClose,
+}: {
+  question: QuestionRow | null;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [answerType, setAnswerType] = useState<"exact" | "range_absolute" | "range_percent">("exact");
+  const [rangeWidth, setRangeWidth] = useState("");
+  const [maxPoints, setMaxPoints] = useState("");
+  const [maxAttempts, setMaxAttempts] = useState("");
+  const [dropOff, setDropOff] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (question && open) {
+      setTitle(question.title);
+      setDescription(question.description || "");
+      setAnswer(String(question.answer));
+      setAnswerType(question.answerType as "exact" | "range_absolute" | "range_percent");
+      setRangeWidth(question.rangeTolerance != null ? String(question.rangeTolerance) : "");
+      setMaxPoints(String(question.maxPoints));
+      setMaxAttempts(String(question.maxAttempts));
+      setDropOff(question.pointsDropOff.replace(/[\[\]]/g, ""));
+      setEditing(false);
+    }
+  }, [question, open]);
+
+  if (!question) return null;
+
+  const isSim = question.answerSource === "simulation";
+  const simResults: number[] | null =
+    isSim && question.simulationResults
+      ? JSON.parse(question.simulationResults)
+      : null;
+  const histData = simResults ? buildHistogramData(simResults) : null;
+  const isRange = answerType !== "exact";
+
+  async function handleSave() {
+    const points = dropOff
+      .split(",")
+      .map((s) => parseInt(s.trim()))
+      .filter((n) => !isNaN(n));
+    if (points.length === 0) {
+      toast.error("Enter at least one drop-off value");
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateQuestion(question!.id, {
+        title,
+        description,
+        answer: isSim ? undefined : parseFloat(answer),
+        answerType,
+        rangeTolerance: isRange ? parseFloat(rangeWidth) : null,
+        maxPoints: parseInt(maxPoints) || 100,
+        maxAttempts: parseInt(maxAttempts) || 3,
+        pointsDropOff: points,
+      });
+      toast.success("Question updated");
+      setEditing(false);
+      onClose();
+    } catch {
+      toast.error("Failed to update");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{editing ? "Edit Question" : "Question Details"}</DialogTitle>
+          <DialogDescription>{question.title}</DialogDescription>
+        </DialogHeader>
+
+        {editing ? (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Title</Label>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} />
+            </div>
+            {!isSim && (
+              <div className="space-y-2">
+                <Label>Answer</Label>
+                <Input type="number" step="any" value={answer} onChange={(e) => setAnswer(e.target.value)} />
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label>Response Type</Label>
+              <div className="flex gap-2 flex-wrap">
+                <Button type="button" size="sm" variant={answerType === "exact" ? "default" : "outline"} onClick={() => setAnswerType("exact")}>Exact</Button>
+                <Button type="button" size="sm" variant={answerType === "range_absolute" ? "default" : "outline"} onClick={() => setAnswerType("range_absolute")}>Range (Absolute)</Button>
+                <Button type="button" size="sm" variant={answerType === "range_percent" ? "default" : "outline"} onClick={() => setAnswerType("range_percent")}>Range (%)</Button>
+              </div>
+            </div>
+            {isRange && (
+              <div className="space-y-2">
+                <Label>{answerType === "range_percent" ? "Range Width (%)" : "Range Width"}</Label>
+                <Input type="number" step="any" value={rangeWidth} onChange={(e) => setRangeWidth(e.target.value)} />
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Max Points</Label>
+                <Input type="number" value={maxPoints} onChange={(e) => setMaxPoints(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Max Attempts</Label>
+                <Input type="number" value={maxAttempts} onChange={(e) => setMaxAttempts(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Drop-off</Label>
+                <Input value={dropOff} onChange={(e) => setDropOff(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-1 text-sm">
+              {question.description && (
+                <p className="text-muted-foreground">{question.description}</p>
+              )}
+              <p>
+                <span className="font-medium">Source:</span>{" "}
+                {isSim ? "Simulation" : "Point"}
+              </p>
+              <p>
+                <span className="font-medium">Response:</span>{" "}
+                {question.answerType === "exact"
+                  ? "Exact"
+                  : question.answerType === "range_percent"
+                    ? `Range (${question.rangeTolerance}% wide)`
+                    : `Range (${question.rangeTolerance} wide)`}
+              </p>
+              {!isSim && (
+                <p>
+                  <span className="font-medium">Answer:</span>{" "}
+                  <span className="font-mono">{question.answer}</span>
+                </p>
+              )}
+              <p>
+                <span className="font-medium">Points:</span>{" "}
+                Max {question.maxPoints} | Attempts: {question.maxAttempts} | Drop-off: {question.pointsDropOff}
+              </p>
+            </div>
+
+            {isSim && simResults && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">
+                  Simulation: {simResults.length} results [{Math.min(...simResults)}, {Math.max(...simResults)}]
+                </p>
+                <div className="h-48 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={histData!}>
+                      <XAxis
+                        dataKey="range"
+                        tick={{ fontSize: 10 }}
+                        interval="preserveStartEnd"
+                      />
+                      <YAxis tick={{ fontSize: 10 }} />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="hsl(var(--primary))" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                Edit
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

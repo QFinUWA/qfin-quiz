@@ -128,6 +128,35 @@ export async function updateQuestionStatus(
     .run();
 }
 
+export async function updateQuestion(
+  questionId: string,
+  data: {
+    title?: string;
+    description?: string;
+    answer?: number;
+    answerType?: "exact" | "range_absolute" | "range_percent";
+    rangeTolerance?: number | null;
+    maxPoints?: number;
+    maxAttempts?: number;
+    pointsDropOff?: number[];
+  }
+) {
+  const updates: Record<string, unknown> = {};
+  if (data.title !== undefined) updates.title = data.title;
+  if (data.description !== undefined) updates.description = data.description || null;
+  if (data.answer !== undefined) updates.answer = data.answer;
+  if (data.answerType !== undefined) updates.answerType = data.answerType;
+  if (data.rangeTolerance !== undefined) updates.rangeTolerance = data.rangeTolerance;
+  if (data.maxPoints !== undefined) updates.maxPoints = data.maxPoints;
+  if (data.maxAttempts !== undefined) updates.maxAttempts = data.maxAttempts;
+  if (data.pointsDropOff !== undefined) updates.pointsDropOff = JSON.stringify(data.pointsDropOff);
+
+  db.update(questions)
+    .set(updates)
+    .where(eq(questions.id, questionId))
+    .run();
+}
+
 export async function deleteQuestion(questionId: string) {
   db.delete(questions).where(eq(questions.id, questionId)).run();
 }
