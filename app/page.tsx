@@ -213,6 +213,17 @@ export default function Home() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs h-6 px-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/admin/${session.id}`);
+                        }}
+                      >
+                        Admin
+                      </Button>
                       <Badge
                         variant="outline"
                         className={statusColor[session.status] ?? ""}
