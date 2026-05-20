@@ -57,6 +57,10 @@ export default function PlayPage({
   const [sessionStatus, setSessionStatus] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
+  const [teamTotalPoints, setTeamTotalPoints] = useState(0);
+  const [scheduledEndAt, setScheduledEndAt] = useState<number | null>(null);
+  const [scheduledStartAt, setScheduledStartAt] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState<string | null>(null);
 
   useEffect(() => {
     const storedSession = localStorage.getItem("sessionId");
@@ -78,6 +82,9 @@ export default function PlayPage({
       const data = await res.json();
       setQuestions(data.questions);
       setSessionStatus(data.sessionStatus);
+      setTeamTotalPoints(data.teamTotalPoints ?? 0);
+      setScheduledEndAt(data.scheduledEndAt ?? null);
+      setScheduledStartAt(data.scheduledStartAt ?? null);
     } catch {
       // silent retry
     }
@@ -89,6 +96,28 @@ export default function PlayPage({
     const interval = setInterval(fetchQuestions, 3000);
     return () => clearInterval(interval);
   }, [sessionId, fetchQuestions]);
+
+  useEffect(() => {
+    const target = sessionStatus === "lobby" ? scheduledStartAt : scheduledEndAt;
+    if (!target) {
+      setCountdown(null);
+      return;
+    }
+    function tick() {
+      const diff = target! - Date.now();
+      if (diff <= 0) {
+        setCountdown(null);
+        return;
+      }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setCountdown(h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`);
+    }
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [scheduledEndAt, scheduledStartAt, sessionStatus]);
 
   async function handleSubmit(
     questionId: string,
@@ -138,18 +167,38 @@ export default function PlayPage({
             Playing as {username || "Anonymous"}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            if (sessionId) router.push(`/leaderboard/${sessionId}`);
-          }}
-        >
-          Leaderboard
-        </Button>
+        <div className="flex items-center gap-3">
+          {countdown && (
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground">
+                {sessionStatus === "lobby" ? "Starts in" : "Time left"}
+              </p>
+              <p className="font-mono text-lg font-bold tabular-nums">{countdown}</p>
+            </div>
+          )}
+          <div className="text-center">
+            <p className="text-xs text-muted-foreground">Points</p>
+            <p className="font-mono text-lg font-bold">{teamTotalPoints}</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (sessionId) router.push(`/leaderboard/${sessionId}`);
+            }}
+          >
+            Leaderboard
+          </Button>
+        </div>
       </header>
 
       <main className="flex-1 p-4 max-w-2xl mx-auto w-full space-y-4">
+        {sessionStatus === "finished" && questions.length > 0 && (
+          <div className="bg-muted rounded-lg px-4 py-3 text-center">
+            <p className="font-medium">Session ended</p>
+            <p className="text-sm text-muted-foreground">Final score: {teamTotalPoints} points</p>
+          </div>
+        )}
         {questions.length === 0 ? (
           <div className="flex flex-1 items-center justify-center py-20">
             <div className="text-center space-y-2">
@@ -160,7 +209,9 @@ export default function PlayPage({
               </p>
               <p className="text-muted-foreground">
                 {sessionStatus === "lobby"
-                  ? "The session hasn't started yet. Hang tight!"
+                  ? countdown
+                    ? `Starting in ${countdown}`
+                    : "The session hasn't started yet. Hang tight!"
                   : "The admin will activate questions soon"}
               </p>
             </div>
@@ -172,6 +223,7 @@ export default function PlayPage({
               question={q}
               onSubmit={handleSubmit}
               submitting={submitting === q.id}
+              sessionActive={sessionStatus === "active"}
             />
           ))
         )}
@@ -184,6 +236,7 @@ function QuestionCard({
   question,
   onSubmit,
   submitting,
+  sessionActive,
 }: {
   question: Question;
   onSubmit: (
@@ -192,10 +245,12 @@ function QuestionCard({
     values: { answer?: number; min?: number; max?: number }
   ) => void;
   submitting: boolean;
+  sessionActive: boolean;
 }) {
   const isExact = question.answerType === "exact";
   const isSimulation = question.answerSource === "simulation";
   const showRange = !isExact;
+  const [collapsed, setCollapsed] = useState(false);
   const [answer, setAnswer] = useState("");
   const [rangeMin, setRangeMin] = useState("");
   const [rangeMax, setRangeMax] = useState("");
@@ -229,6 +284,7 @@ function QuestionCard({
 
   const attemptsLeft = question.maxAttempts - question.attemptsUsed;
   const canSubmit =
+    sessionActive &&
     (isSimulation || !question.hasCorrect) &&
     attemptsLeft > 0 &&
     question.status === "active";
@@ -287,18 +343,23 @@ function QuestionCard({
               : ""
       }
     >
-      <CardHeader>
+      <CardHeader className="cursor-pointer select-none" onClick={() => setCollapsed((c) => !c)}>
         <div className="flex items-start justify-between gap-2">
           <div>
-            <CardTitle className="text-lg">{question.title}</CardTitle>
-            {question.description && (
+            <CardTitle className="text-lg flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">{collapsed ? "+" : "-"}</span>
+              {question.title}
+            </CardTitle>
+            {!collapsed && question.description && (
               <CardDescription className="mt-1">
                 {question.description}
               </CardDescription>
             )}
-            <p className="text-xs text-muted-foreground mt-1">
-              {answerTypeLabel}
-            </p>
+            {!collapsed && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {answerTypeLabel}
+              </p>
+            )}
           </div>
           <div className="flex flex-col items-end gap-1">
             {isSimulation ? (
@@ -341,7 +402,7 @@ function QuestionCard({
         </div>
       </CardHeader>
 
-      {canSubmit && (
+      {!collapsed && canSubmit && (
         <CardContent>
           <form onSubmit={handleFormSubmit} className="space-y-3">
             {showRange ? <>
@@ -350,9 +411,9 @@ function QuestionCard({
                   <div className="flex justify-between items-baseline">
                     <Label>Min</Label>
                     {minHint !== null && (
-                      <span className="text-[11px] text-muted-foreground">
-                        lowest: {minHint}
-                      </span>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setRangeMin(String(minHint)); }} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+                        min {minHint} &larr;
+                      </button>
                     )}
                   </div>
                   <Input
@@ -367,9 +428,9 @@ function QuestionCard({
                   <div className="flex justify-between items-baseline">
                     <Label>Max</Label>
                     {maxHint !== null && (
-                      <span className="text-[11px] text-muted-foreground">
-                        highest: {maxHint}
-                      </span>
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setRangeMax(String(maxHint)); }} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+                        max {maxHint} &larr;
+                      </button>
                     )}
                   </div>
                   <Input
@@ -404,7 +465,7 @@ function QuestionCard({
         </CardContent>
       )}
 
-      {question.submissions.length > 0 && (
+      {!collapsed && question.submissions.length > 0 && (
         <CardFooter className="flex-col items-start gap-1">
           <p className="text-sm font-medium">Previous attempts:</p>
           {question.submissions.map((s, i) => (

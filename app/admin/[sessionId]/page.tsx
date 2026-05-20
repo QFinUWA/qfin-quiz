@@ -46,6 +46,8 @@ import {
   verifyAdmin,
   getSessionData,
   updateSessionStatus,
+  setScheduledStart,
+  setScheduledEnd,
 } from "@/lib/actions/sessions";
 import {
   addQuestion,
@@ -72,10 +74,13 @@ export default function AdminPage({
   const [detailsQuestion, setDetailsQuestion] = useState<string | null>(null);
   const [detailsEditing, setDetailsEditing] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{
-    type: "close" | "reveal" | "reveal-all" | "delete" | "start-session" | "end-session";
+    type: "close" | "reveal" | "reveal-all" | "delete" | "start-session" | "end-session" | "reopen-session";
     questionId?: string;
     title: string;
   } | null>(null);
+  const [scheduleType, setScheduleType] = useState<"start" | "end" | null>(null);
+  const [scheduleMinutes, setScheduleMinutes] = useState("10");
+  const [countdown, setCountdown] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem(`admin-${sessionId}`);
@@ -101,6 +106,38 @@ export default function AdminPage({
     const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
   }, [authenticated, fetchData]);
+
+  useEffect(() => {
+    if (!data) {
+      setCountdown(null);
+      return;
+    }
+    const target =
+      data.session.status === "lobby" && data.session.scheduledStartAt
+        ? data.session.scheduledStartAt.getTime()
+        : data.session.status === "active" && data.session.scheduledEndAt
+          ? data.session.scheduledEndAt.getTime()
+          : null;
+    if (!target) {
+      setCountdown(null);
+      return;
+    }
+    function tick() {
+      const diff = target! - Date.now();
+      if (diff <= 0) {
+        setCountdown(null);
+        fetchData();
+        return;
+      }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setCountdown(h > 0 ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`);
+    }
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [data, fetchData]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -199,41 +236,145 @@ export default function AdminPage({
               </Badge>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push("/")}
-            >
-              &larr; Back
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push(`/leaderboard/${sessionId}`)}
-            >
-              Leaderboard
-            </Button>
-          {data.session.status === "lobby" && (
-            <Button
-              size="sm"
-              onClick={() => setConfirmAction({ type: "start-session", title: "" })}
-            >
-              Start Session
-            </Button>
+          {countdown && (
+            <div className="text-right">
+              <p className="text-xs text-muted-foreground">
+                {data.session.status === "lobby" ? "Starts in" : "Ends in"}
+              </p>
+              <p className="font-mono text-2xl font-bold tabular-nums">{countdown}</p>
+            </div>
           )}
-          {data.session.status === "active" && (
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => setConfirmAction({ type: "end-session", title: "" })}
-            >
-              End Session
-            </Button>
-          )}
+          <div className="flex flex-col gap-2 items-end">
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => router.push("/")}
+              >
+                &larr; Back
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/leaderboard/${sessionId}`)}
+              >
+                Leaderboard
+              </Button>
+            {data.session.status === "lobby" && (
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => setConfirmAction({ type: "start-session", title: "" })}
+                >
+                  Start Now
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setScheduleType("start")}
+                >
+                  Schedule Start
+                </Button>
+              </>
+            )}
+            {data.session.status === "active" && (
+              <>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setConfirmAction({ type: "end-session", title: "" })}
+                >
+                  End Now
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setScheduleType("end")}
+                >
+                  Schedule End
+                </Button>
+              </>
+            )}
+            {data.session.status === "finished" && (
+              <Button
+                size="sm"
+                onClick={() => setConfirmAction({ type: "reopen-session", title: "" })}
+              >
+                Reopen Session
+              </Button>
+            )}
+            </div>
+            {((data.session.status === "lobby" && data.session.scheduledStartAt) ||
+              (data.session.status === "active" && data.session.scheduledEndAt)) && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-xs"
+                onClick={async () => {
+                  if (data.session.status === "lobby") {
+                    await setScheduledStart(sessionId, null);
+                  } else {
+                    await setScheduledEnd(sessionId, null);
+                  }
+                  fetchData();
+                  toast.success("Schedule cleared");
+                }}
+              >
+                Clear schedule
+              </Button>
+            )}
           </div>
         </div>
       </header>
+
+      {/* Schedule Dialog */}
+      <Dialog open={!!scheduleType} onOpenChange={(open) => { if (!open) setScheduleType(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{scheduleType === "start" ? "Schedule Session Start" : "Schedule Session End"}</DialogTitle>
+            <DialogDescription>
+              {scheduleType === "start"
+                ? "Set how many minutes from now the session should automatically start."
+                : "Set how many minutes from now the session should automatically end."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Minutes from now</Label>
+              <Input
+                type="number"
+                min="1"
+                value={scheduleMinutes}
+                onChange={(e) => setScheduleMinutes(e.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+              <Button
+                onClick={async () => {
+                  const mins = parseInt(scheduleMinutes);
+                  if (isNaN(mins) || mins < 1) {
+                    toast.error("Enter a valid number of minutes");
+                    return;
+                  }
+                  const time = new Date(Date.now() + mins * 60000);
+                  if (scheduleType === "start") {
+                    await setScheduledStart(sessionId, time);
+                    toast.success(`Session will start in ${mins} minute${mins !== 1 ? "s" : ""}`);
+                  } else {
+                    await setScheduledEnd(sessionId, time);
+                    toast.success(`Session will end in ${mins} minute${mins !== 1 ? "s" : ""}`);
+                  }
+                  setScheduleType(null);
+                  fetchData();
+                }}
+              >
+                Schedule
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <main className="flex-1 p-4 max-w-4xl mx-auto w-full space-y-6">
         {/* Teams */}
@@ -285,30 +426,34 @@ export default function AdminPage({
                   ? "Start Session"
                   : confirmAction?.type === "end-session"
                     ? "End Session"
-                    : confirmAction?.type === "close"
-                      ? "Close Question"
-                      : confirmAction?.type === "delete"
-                        ? "Delete Question"
-                        : "Reveal Answer"}
+                    : confirmAction?.type === "reopen-session"
+                      ? "Reopen Session"
+                      : confirmAction?.type === "close"
+                        ? "Close Question"
+                        : confirmAction?.type === "delete"
+                          ? "Delete Question"
+                          : "Reveal Answer"}
               </DialogTitle>
               <DialogDescription>
                 {confirmAction?.type === "start-session"
                   ? "Start the session? Players will be able to see and answer active questions."
                   : confirmAction?.type === "end-session"
-                    ? "End the session? Players will no longer be able to submit answers. This cannot be undone."
-                    : confirmAction?.type === "reveal-all"
-                      ? "This will reveal answers for ALL questions. This cannot be undone."
-                      : confirmAction?.type === "reveal"
-                        ? `Reveal the answer for "${confirmAction.title}"? This cannot be undone.`
-                        : confirmAction?.type === "delete"
-                          ? `Delete "${confirmAction?.title}"? This cannot be undone.`
-                          : `Close "${confirmAction?.title}"? Players will no longer be able to submit answers.`}
+                    ? "End the session? Players will no longer be able to submit answers. You can reopen it later."
+                    : confirmAction?.type === "reopen-session"
+                      ? "Reopen the session? Players will be able to submit answers again."
+                      : confirmAction?.type === "reveal-all"
+                        ? "This will reveal answers for ALL questions. This cannot be undone."
+                        : confirmAction?.type === "reveal"
+                          ? `Reveal the answer for "${confirmAction.title}"? This cannot be undone.`
+                          : confirmAction?.type === "delete"
+                            ? `Delete "${confirmAction?.title}"? This cannot be undone.`
+                            : `Close "${confirmAction?.title}"? Players will no longer be able to submit answers.`}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
               <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
               <Button
-                variant={confirmAction?.type === "close" || confirmAction?.type === "start-session" ? "default" : "destructive"}
+                variant={confirmAction?.type === "close" || confirmAction?.type === "start-session" || confirmAction?.type === "reopen-session" ? "default" : "destructive"}
                 onClick={async () => {
                   if (!confirmAction) return;
                   if (confirmAction.type === "start-session") {
@@ -317,6 +462,9 @@ export default function AdminPage({
                   } else if (confirmAction.type === "end-session") {
                     await updateSessionStatus(sessionId, "finished");
                     toast.success("Session ended");
+                  } else if (confirmAction.type === "reopen-session") {
+                    await updateSessionStatus(sessionId, "active");
+                    toast.success("Session reopened");
                   } else if (confirmAction.type === "reveal-all") {
                     for (const q of data.questions) {
                       if (q.status !== "revealed") {
@@ -334,7 +482,7 @@ export default function AdminPage({
                   fetchData();
                 }}
               >
-                {confirmAction?.type === "start-session" ? "Start" : confirmAction?.type === "end-session" ? "End" : confirmAction?.type === "close" ? "Close" : confirmAction?.type === "delete" ? "Delete" : "Reveal"}
+                {confirmAction?.type === "start-session" ? "Start" : confirmAction?.type === "end-session" ? "End" : confirmAction?.type === "reopen-session" ? "Reopen" : confirmAction?.type === "close" ? "Close" : confirmAction?.type === "delete" ? "Delete" : "Reveal"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1123,35 +1271,36 @@ function DetailsDialog({
             {qSubs.length > 0 && (
               <div className="space-y-2">
                 <p className="text-sm font-medium">Submissions by Team</p>
-                <div className="space-y-3 max-h-48 overflow-y-auto">
-                  {teams
-                    .map((t) => {
-                      const teamSubs = qSubs
-                        .filter((s) => s.teamId === t.id)
-                        .sort((a, b) => a.attemptNumber - b.attemptNumber);
-                      if (teamSubs.length === 0) return null;
-                      const totalPts = teamSubs.reduce((sum, s) => sum + s.pointsAwarded, 0);
-                      return (
-                        <div key={t.id} className="text-sm">
-                          <div className="flex justify-between items-center">
-                            <span className="font-medium">{t.name}</span>
-                            <span className="text-xs font-mono text-muted-foreground">{totalPts} pts</span>
-                          </div>
-                          <div className="ml-2 space-y-0.5">
-                            {teamSubs.map((s) => (
-                              <div key={s.id} className={`text-xs ${s.isCorrect ? "text-green-500" : s.pointsAwarded > 0 ? "text-blue-500" : "text-muted-foreground"}`}>
-                                #{s.attemptNumber}:{" "}
-                                {s.submissionType === "number"
-                                  ? s.answerValue
-                                  : `[${s.rangeMin}, ${s.rangeMax}]`}
-                                {" "}- {s.pointsAwarded > 0 ? `+${s.pointsAwarded}` : s.isCorrect ? "correct" : "wrong"}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })
-                    .filter(Boolean)}
+                <div className="max-h-56 overflow-y-auto rounded border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Team</TableHead>
+                        <TableHead className="text-xs">#</TableHead>
+                        <TableHead className="text-xs">Answer</TableHead>
+                        <TableHead className="text-xs text-right">Points</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {teams.flatMap((t) => {
+                        const teamSubs = qSubs
+                          .filter((s) => s.teamId === t.id)
+                          .sort((a, b) => a.attemptNumber - b.attemptNumber);
+                        return teamSubs.map((s, i) => (
+                          <TableRow key={s.id}>
+                            <TableCell className="text-xs font-medium py-1.5">{i === 0 ? t.name : ""}</TableCell>
+                            <TableCell className="text-xs py-1.5 text-muted-foreground">{s.attemptNumber}</TableCell>
+                            <TableCell className="text-xs py-1.5 font-mono">
+                              {s.submissionType === "number" ? s.answerValue : `[${s.rangeMin}, ${s.rangeMax}]`}
+                            </TableCell>
+                            <TableCell className={`text-xs py-1.5 text-right font-mono ${s.isCorrect ? "text-green-500" : s.pointsAwarded > 0 ? "text-blue-500" : "text-muted-foreground"}`}>
+                              {s.pointsAwarded > 0 ? `+${s.pointsAwarded}` : s.isCorrect ? "correct" : "-"}
+                            </TableCell>
+                          </TableRow>
+                        ));
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             )}
