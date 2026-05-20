@@ -964,6 +964,29 @@ function DetailsDialog({
 
         {editing ? (
           <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Badge variant="outline">{isSim ? "Simulation" : "Point"}</Badge>
+              {isSim && question.simulationScript && (
+                <button
+                  type="button"
+                  className="text-xs text-blue-500 hover:underline"
+                  onClick={() => {
+                    const blob = new Blob([question.simulationScript!], { type: "text/x-python" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `${question.title.replace(/\s+/g, "_")}.py`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  Download script
+                </button>
+              )}
+              {isSim && question.simulationN && (
+                <span>n={question.simulationN}</span>
+              )}
+            </div>
             <div className="space-y-2">
               <Label>Title</Label>
               <Input value={title} onChange={(e) => setTitle(e.target.value)} />
