@@ -17,7 +17,10 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -57,6 +60,12 @@ export default function AdminPage({
   const [data, setData] = useState<SessionData | null>(null);
   const [addingQuestion, setAddingQuestion] = useState(false);
   const [realizing, setRealizing] = useState<string | null>(null);
+  const [showAnswer, setShowAnswer] = useState<Set<string>>(new Set());
+  const [confirmAction, setConfirmAction] = useState<{
+    type: "close" | "reveal" | "reveal-all";
+    questionId?: string;
+    title: string;
+  } | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem(`admin-${sessionId}`);
@@ -258,10 +267,65 @@ export default function AdminPage({
           </CardContent>
         </Card>
 
+        {/* Confirm Dialog */}
+        <Dialog open={!!confirmAction} onOpenChange={(open) => { if (!open) setConfirmAction(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {confirmAction?.type === "close" ? "Close Question" : "Reveal Answer"}
+              </DialogTitle>
+              <DialogDescription>
+                {confirmAction?.type === "reveal-all"
+                  ? "This will reveal answers for ALL questions. This cannot be undone."
+                  : confirmAction?.type === "reveal"
+                    ? `Reveal the answer for "${confirmAction.title}"? This cannot be undone.`
+                    : `Close "${confirmAction?.title}"? Players will no longer be able to submit answers.`}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+              <Button
+                variant={confirmAction?.type === "close" ? "default" : "destructive"}
+                onClick={async () => {
+                  if (!confirmAction) return;
+                  if (confirmAction.type === "reveal-all") {
+                    for (const q of data.questions) {
+                      if (q.status !== "revealed") {
+                        await updateQuestionStatus(q.id, "revealed");
+                      }
+                    }
+                  } else if (confirmAction.type === "reveal" && confirmAction.questionId) {
+                    await updateQuestionStatus(confirmAction.questionId, "revealed");
+                  } else if (confirmAction.type === "close" && confirmAction.questionId) {
+                    await updateQuestionStatus(confirmAction.questionId, "closed");
+                  }
+                  setConfirmAction(null);
+                  fetchData();
+                }}
+              >
+                {confirmAction?.type === "close" ? "Close" : "Reveal"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Questions */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Questions ({data.questions.length})</CardTitle>
+            <div className="flex items-center gap-3">
+              <CardTitle>Questions ({data.questions.length})</CardTitle>
+              {data.questions.some((q) => q.status !== "revealed") && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() =>
+                    setConfirmAction({ type: "reveal-all", title: "" })
+                  }
+                >
+                  Reveal All
+                </Button>
+              )}
+            </div>
             <Dialog open={addingQuestion} onOpenChange={setAddingQuestion}>
               <DialogTrigger
                 render={<Button size="sm" />}
@@ -301,6 +365,7 @@ export default function AdminPage({
                   isSim && q.simulationResults
                     ? JSON.parse(q.simulationResults)
                     : null;
+                const answerVisible = showAnswer.has(q.id);
 
                 const responseLabel =
                   q.answerType === "exact"
@@ -322,7 +387,22 @@ export default function AdminPage({
                         <div className="text-sm text-muted-foreground mt-1 space-y-0.5">
                           <p>
                             {isSim ? "Simulation" : "Point"} | {responseLabel}{" "}
-                            {!isSim && <>| Answer: <span className="font-mono">{q.answer}</span></>}{" "}
+                            {!isSim && (
+                              answerVisible
+                                ? <>| Answer: <span className="font-mono">{q.answer}</span>{" "}
+                                    <button
+                                      type="button"
+                                      className="text-xs underline text-muted-foreground hover:text-foreground"
+                                      onClick={() => setShowAnswer((prev) => { const next = new Set(prev); next.delete(q.id); return next; })}
+                                    >hide</button>
+                                  </>
+                                : <>| <button
+                                      type="button"
+                                      className="text-xs underline text-muted-foreground hover:text-foreground"
+                                      onClick={() => setShowAnswer((prev) => new Set(prev).add(q.id))}
+                                    >Show answer</button>
+                                  </>
+                            )}{" "}
                             | Max: {q.maxPoints}pts | Attempts: {q.maxAttempts}{" "}
                             | Drop-off: {q.pointsDropOff}
                           </p>
@@ -379,20 +459,18 @@ export default function AdminPage({
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={async () => {
-                              await updateQuestionStatus(q.id, "closed");
-                              fetchData();
-                            }}
+                            onClick={() =>
+                              setConfirmAction({ type: "close", questionId: q.id, title: q.title })
+                            }
                           >
                             Close
                           </Button>
                           <Button
                             size="sm"
                             variant="secondary"
-                            onClick={async () => {
-                              await updateQuestionStatus(q.id, "revealed");
-                              fetchData();
-                            }}
+                            onClick={() =>
+                              setConfirmAction({ type: "reveal", questionId: q.id, title: q.title })
+                            }
                           >
                             Reveal Answer
                           </Button>
@@ -402,10 +480,9 @@ export default function AdminPage({
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={async () => {
-                            await updateQuestionStatus(q.id, "revealed");
-                            fetchData();
-                          }}
+                          onClick={() =>
+                            setConfirmAction({ type: "reveal", questionId: q.id, title: q.title })
+                          }
                         >
                           Reveal Answer
                         </Button>
@@ -624,7 +701,7 @@ function AddQuestionForm({
               placeholder="def simulate() -> int:&#10;    return random.randint(1, 100)"
               value={simulationScript}
               onChange={(e) => setSimulationScript(e.target.value)}
-              className="font-mono text-sm min-h-[120px]"
+              className="font-mono text-sm min-h-[120px] max-h-[40vh]"
             />
           </div>
 
