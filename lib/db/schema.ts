@@ -8,6 +8,8 @@ export const sessions = sqliteTable("sessions", {
   status: text("status", { enum: ["lobby", "active", "finished"] })
     .notNull()
     .default("lobby"),
+  scheduledStartAt: integer("scheduled_start_at", { mode: "timestamp" }),
+  scheduledEndAt: integer("scheduled_end_at", { mode: "timestamp" }),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 

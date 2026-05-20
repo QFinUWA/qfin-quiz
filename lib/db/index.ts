@@ -18,6 +18,12 @@ sqlite.pragma("foreign_keys = ON");
 export const db = drizzle(sqlite, { schema });
 
 try {
+  sqlite.exec(`ALTER TABLE sessions ADD COLUMN scheduled_start_at INTEGER`);
+} catch {}
+try {
+  sqlite.exec(`ALTER TABLE sessions ADD COLUMN scheduled_end_at INTEGER`);
+} catch {}
+try {
   sqlite.exec(`ALTER TABLE questions ADD COLUMN simulation_script TEXT`);
 } catch {}
 try {

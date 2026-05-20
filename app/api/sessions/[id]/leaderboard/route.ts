@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
-import { sessions, teams, questions, submissions } from "@/lib/db/schema";
+import { teams, questions, submissions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { checkScheduledTransitions } from "@/lib/actions/sessions";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +11,7 @@ export async function GET(
 ) {
   const { id: sessionId } = await params;
 
-  const session = db
-    .select()
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
-    .get();
+  const session = await checkScheduledTransitions(sessionId);
 
   const sessionTeams = db
     .select()

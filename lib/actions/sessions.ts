@@ -55,19 +55,78 @@ export async function updateSessionStatus(
   sessionId: string,
   status: "lobby" | "active" | "finished"
 ) {
+  const updates: Record<string, unknown> = { status };
+  if (status === "active") {
+    updates.scheduledStartAt = null;
+    updates.scheduledEndAt = null;
+  }
+  if (status === "finished") {
+    updates.scheduledEndAt = null;
+  }
+  if (status === "lobby") {
+    updates.scheduledStartAt = null;
+    updates.scheduledEndAt = null;
+  }
   db.update(sessions)
-    .set({ status })
+    .set(updates)
     .where(eq(sessions.id, sessionId))
     .run();
 }
 
-export async function getSessionData(sessionId: string) {
+export async function setScheduledStart(sessionId: string, time: Date | null) {
+  db.update(sessions)
+    .set({ scheduledStartAt: time })
+    .where(eq(sessions.id, sessionId))
+    .run();
+}
+
+export async function setScheduledEnd(sessionId: string, time: Date | null) {
+  db.update(sessions)
+    .set({ scheduledEndAt: time })
+    .where(eq(sessions.id, sessionId))
+    .run();
+}
+
+export async function checkScheduledTransitions(sessionId: string) {
   const session = db
     .select()
     .from(sessions)
     .where(eq(sessions.id, sessionId))
     .get();
 
+  if (!session) return null;
+
+  const now = new Date();
+
+  if (
+    session.status === "lobby" &&
+    session.scheduledStartAt &&
+    now >= session.scheduledStartAt
+  ) {
+    db.update(sessions)
+      .set({ status: "active", scheduledStartAt: null })
+      .where(eq(sessions.id, sessionId))
+      .run();
+    return { ...session, status: "active" as const, scheduledStartAt: null };
+  }
+
+  if (
+    session.status === "active" &&
+    session.scheduledEndAt &&
+    now >= session.scheduledEndAt
+  ) {
+    db.update(sessions)
+      .set({ status: "finished", scheduledEndAt: null })
+      .where(eq(sessions.id, sessionId))
+      .run();
+    return { ...session, status: "finished" as const, scheduledEndAt: null };
+  }
+
+  return session;
+}
+
+export async function getSessionData(sessionId: string) {
+  const session = await checkScheduledTransitions(sessionId);
   if (!session) return null;
 
   const sessionTeams = db

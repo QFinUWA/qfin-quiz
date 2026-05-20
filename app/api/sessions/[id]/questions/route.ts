@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
-import { sessions, questions, submissions } from "@/lib/db/schema";
+import { questions, submissions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
+import { checkScheduledTransitions } from "@/lib/actions/sessions";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +13,18 @@ export async function GET(
   const url = new URL(request.url);
   const teamId = url.searchParams.get("teamId");
 
-  const session = db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
-  if (!session || session.status === "lobby") {
-    return Response.json({ questions: [], sessionStatus: session?.status ?? "lobby" });
+  const session = await checkScheduledTransitions(sessionId);
+  if (!session) {
+    return Response.json({ questions: [], sessionStatus: "lobby" });
+  }
+  if (session.status === "lobby") {
+    return Response.json({
+      questions: [],
+      sessionStatus: "lobby",
+      scheduledStartAt: session.scheduledStartAt?.getTime() ?? null,
+      scheduledEndAt: session.scheduledEndAt?.getTime() ?? null,
+      teamTotalPoints: 0,
+    });
   }
 
   const sessionQuestions = db
@@ -77,5 +87,23 @@ export async function GET(
       };
     });
 
-  return Response.json({ questions: activeQuestions, sessionStatus: session.status });
+  let teamTotalPoints = 0;
+  if (teamId) {
+    const questionIds = sessionQuestions.map((q) => q.id);
+    const teamSubs = db
+      .select()
+      .from(submissions)
+      .where(eq(submissions.teamId, teamId))
+      .all()
+      .filter((s) => questionIds.includes(s.questionId));
+    teamTotalPoints = teamSubs.reduce((sum, s) => sum + s.pointsAwarded, 0);
+  }
+
+  return Response.json({
+    questions: activeQuestions,
+    sessionStatus: session.status,
+    scheduledStartAt: session.scheduledStartAt?.getTime() ?? null,
+    scheduledEndAt: session.scheduledEndAt?.getTime() ?? null,
+    teamTotalPoints,
+  });
 }
