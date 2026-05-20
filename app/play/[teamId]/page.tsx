@@ -21,7 +21,8 @@ type Question = {
   id: string;
   title: string;
   description: string | null;
-  answerType: "exact" | "range_absolute" | "range_percent" | "simulation";
+  answerType: "exact" | "range_absolute" | "range_percent";
+  answerSource: "point" | "simulation";
   rangeTolerance: number | null;
   maxPoints: number;
   maxAttempts: number;
@@ -109,7 +110,7 @@ export default function PlayPage({
       }
 
       const q = questions.find((q) => q.id === questionId);
-      if (q?.answerType === "simulation") {
+      if (q?.answerSource === "simulation") {
         toast.success(`+${result.pointsAwarded} points`);
       } else if (result.isCorrect) {
         toast.success(`Correct! +${result.pointsAwarded} points`);
@@ -185,7 +186,7 @@ function QuestionCard({
   submitting: boolean;
 }) {
   const isExact = question.answerType === "exact";
-  const isSimulation = question.answerType === "simulation";
+  const isSimulation = question.answerSource === "simulation";
   const showRange = !isExact;
   const [answer, setAnswer] = useState("");
   const [rangeMin, setRangeMin] = useState("");
@@ -223,11 +224,10 @@ function QuestionCard({
       rangeError = "Min must be less than max";
     } else if (question.rangeTolerance !== null) {
       if (
-        (question.answerType === "range_absolute" ||
-          question.answerType === "simulation") &&
+        question.answerType === "range_absolute" &&
         max - min > question.rangeTolerance
       ) {
-        rangeError = `Range too wide. Max spread: ${question.rangeTolerance}`;
+        rangeError = `Range too wide. Max width: ${question.rangeTolerance}`;
       } else if (
         question.answerType === "range_percent" &&
         max > min * (1 + question.rangeTolerance / 100)
@@ -267,31 +267,7 @@ function QuestionCard({
         toast.error("Enter valid range values");
         return;
       }
-      if (min > max) {
-        toast.error("Min must be less than max");
-        return;
-      }
-      if (question.rangeTolerance !== null) {
-        if (
-          (question.answerType === "range_absolute" ||
-            question.answerType === "simulation") &&
-          max - min > question.rangeTolerance
-        ) {
-          toast.error(
-            `Range too wide. Max spread: ${question.rangeTolerance}`
-          );
-          return;
-        }
-        if (
-          question.answerType === "range_percent" &&
-          max > min * (1 + question.rangeTolerance / 100)
-        ) {
-          toast.error(
-            `Range too wide. Upper bound can be at most ${question.rangeTolerance}% above lower bound`
-          );
-          return;
-        }
-      }
+      if (rangeError) return;
       onSubmit(question.id, "range", { min, max });
     }
     setAnswer("");
@@ -300,12 +276,14 @@ function QuestionCard({
   }
 
   const answerTypeLabel = isSimulation
-    ? `Simulation - submit a range (max spread: ${question.rangeTolerance}). Score = proportion of ${question.simulationResultCount ?? "?"} results in your range.`
+    ? question.answerType === "range_percent"
+      ? `Simulation - submit a range (upper at most ${question.rangeTolerance}% above lower)`
+      : `Simulation - submit a range (${question.rangeTolerance} units wide)`
     : question.answerType === "exact"
       ? "Exact answer"
       : question.answerType === "range_percent"
-        ? `Range answer - upper bound can be at most ${question.rangeTolerance}% above lower bound`
-        : `Range answer - max spread: ${question.rangeTolerance}`;
+        ? `Range answer - upper bound at most ${question.rangeTolerance}% above lower bound`
+        : `Range answer - ${question.rangeTolerance} units wide`;
 
   return (
     <Card
@@ -391,7 +369,7 @@ function QuestionCard({
                 </div>
               </div>
               {rangeError && (
-                <p className="text-sm text-red-500 col-span-2">{rangeError}</p>
+                <p className="text-sm text-red-500">{rangeError}</p>
               )}
             </> : (
               <div className="space-y-2">

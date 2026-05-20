@@ -45,31 +45,9 @@ export async function submitAnswer(data: {
   let isCorrect = false;
   let pointsAwarded = 0;
   const answerType = question.answerType || "exact";
+  const isSimulation = question.answerSource === "simulation";
 
-  if (answerType === "simulation") {
-    if (data.rangeMin === undefined || data.rangeMax === undefined) {
-      return { error: "Range values required" };
-    }
-
-    const tolerance = question.rangeTolerance ?? Infinity;
-    const spread = data.rangeMax - data.rangeMin;
-    if (spread > tolerance) {
-      return { error: `Range too wide. Max spread: ${tolerance}` };
-    }
-
-    const results: number[] = JSON.parse(question.simulationResults || "[]");
-    if (results.length === 0) {
-      return { error: "Simulation not yet realized" };
-    }
-
-    const hits = results.filter(
-      (r) => r >= data.rangeMin! && r <= data.rangeMax!
-    ).length;
-    const proportion = hits / results.length;
-
-    pointsAwarded = Math.round(proportion * pointsForAttempt);
-    isCorrect = false;
-  } else if (answerType === "exact") {
+  if (answerType === "exact" && !isSimulation) {
     isCorrect = data.answerValue === question.answer;
     pointsAwarded = isCorrect ? pointsForAttempt : 0;
   } else {
@@ -81,7 +59,7 @@ export async function submitAnswer(data: {
     const tolerance = question.rangeTolerance ?? Infinity;
 
     if (answerType === "range_absolute" && spread > tolerance) {
-      return { error: `Range too wide. Max spread: ${tolerance}` };
+      return { error: `Range too wide. Max width: ${tolerance}` };
     }
     if (answerType === "range_percent") {
       const maxAllowed = data.rangeMin * (1 + tolerance / 100);
@@ -92,9 +70,24 @@ export async function submitAnswer(data: {
       }
     }
 
-    isCorrect =
-      data.rangeMin <= question.answer && data.rangeMax >= question.answer;
-    pointsAwarded = isCorrect ? pointsForAttempt : 0;
+    if (isSimulation) {
+      const results: number[] = JSON.parse(question.simulationResults || "[]");
+      if (results.length === 0) {
+        return { error: "Simulation not yet realized" };
+      }
+
+      const hits = results.filter(
+        (r) => r >= data.rangeMin! && r <= data.rangeMax!
+      ).length;
+      const proportion = hits / results.length;
+
+      pointsAwarded = Math.round(proportion * pointsForAttempt);
+      isCorrect = false;
+    } else {
+      isCorrect =
+        data.rangeMin <= question.answer && data.rangeMax >= question.answer;
+      pointsAwarded = isCorrect ? pointsForAttempt : 0;
+    }
   }
 
   const id = generateId();

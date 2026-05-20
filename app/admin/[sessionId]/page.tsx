@@ -296,11 +296,18 @@ export default function AdminPage({
                 const teamsCorrect = new Set(
                   qSubs.filter((s) => s.isCorrect).map((s) => s.teamId)
                 ).size;
-                const isSim = q.answerType === "simulation";
+                const isSim = q.answerSource === "simulation";
                 const simResults: number[] | null =
                   isSim && q.simulationResults
                     ? JSON.parse(q.simulationResults)
                     : null;
+
+                const responseLabel =
+                  q.answerType === "exact"
+                    ? "Exact"
+                    : q.answerType === "range_percent"
+                      ? `Range (${q.rangeTolerance}% wide)`
+                      : `Range (${q.rangeTolerance} wide)`;
 
                 return (
                   <div key={q.id} className="border rounded-lg p-4 space-y-2">
@@ -312,36 +319,24 @@ export default function AdminPage({
                             {q.description}
                           </p>
                         )}
-                        {isSim ? (
-                          <div className="text-sm text-muted-foreground mt-1 space-y-0.5">
+                        <div className="text-sm text-muted-foreground mt-1 space-y-0.5">
+                          <p>
+                            {isSim ? "Simulation" : "Point"} | {responseLabel}{" "}
+                            {!isSim && <>| Answer: <span className="font-mono">{q.answer}</span></>}{" "}
+                            | Max: {q.maxPoints}pts | Attempts: {q.maxAttempts}{" "}
+                            | Drop-off: {q.pointsDropOff}
+                          </p>
+                          {isSim && (
                             <p>
-                              Type: Simulation | n={q.simulationN} | Tolerance: {q.rangeTolerance}{" "}
-                              | Max: {q.maxPoints}pts | Attempts: {q.maxAttempts}{" "}
-                              | Drop-off: {q.pointsDropOff}
+                              n={q.simulationN}
+                              {simResults && <> | {simResults.length} results [{Math.min(...simResults)}, {Math.max(...simResults)}]</>}
                             </p>
-                            {simResults && (
-                              <p>
-                                Results: {simResults.length} values, range [{Math.min(...simResults)}, {Math.max(...simResults)}]
-                              </p>
-                            )}
-                            <p>
-                              {teamsAttempted} teams attempted
-                            </p>
-                          </div>
-                        ) : (
-                          <>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              Answer: <span className="font-mono">{q.answer}</span>{" "}
-                              | Type: {q.answerType === "exact" ? "Exact" : q.answerType === "range_percent" ? `Range (+/-${q.rangeTolerance}%)` : `Range (+/-${q.rangeTolerance})`}{" "}
-                              | Max: {q.maxPoints}pts | Attempts: {q.maxAttempts} |
-                              Drop-off: {q.pointsDropOff}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {teamsAttempted} teams attempted, {teamsCorrect}{" "}
-                              correct
-                            </p>
-                          </>
-                        )}
+                          )}
+                          <p>
+                            {teamsAttempted} teams attempted
+                            {!isSim && <>, {teamsCorrect} correct</>}
+                          </p>
+                        </div>
                       </div>
                       <Badge
                         variant={
@@ -449,10 +444,11 @@ function AddQuestionForm({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [answer, setAnswer] = useState("");
+  const [answerSource, setAnswerSource] = useState<"point" | "simulation">("point");
   const [answerType, setAnswerType] = useState<
-    "exact" | "range_absolute" | "range_percent" | "simulation"
+    "exact" | "range_absolute" | "range_percent"
   >("exact");
-  const [rangeTolerance, setRangeTolerance] = useState("");
+  const [rangeWidth, setRangeWidth] = useState("");
   const [maxPoints, setMaxPoints] = useState("100");
   const [maxAttempts, setMaxAttempts] = useState("3");
   const [dropOff, setDropOff] = useState("100, 50, 25");
@@ -462,7 +458,8 @@ function AddQuestionForm({
   const [simulationN, setSimulationN] = useState("10000");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const isSimulation = answerType === "simulation";
+  const isSimulation = answerSource === "simulation";
+  const isRange = answerType !== "exact";
 
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -478,6 +475,14 @@ function AddQuestionForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
+    if (!isSimulation) {
+      const answerNum = parseFloat(answer);
+      if (isNaN(answerNum)) {
+        toast.error("Answer must be a number");
+        return;
+      }
+    }
+
     if (isSimulation) {
       if (!simulationScript.trim()) {
         toast.error("Upload or paste a simulation script");
@@ -488,20 +493,11 @@ function AddQuestionForm({
         toast.error("Enter a valid number of simulations");
         return;
       }
-      if (!rangeTolerance) {
-        toast.error("Enter a tolerance (max range spread)");
-        return;
-      }
-    } else {
-      const answerNum = parseFloat(answer);
-      if (isNaN(answerNum)) {
-        toast.error("Answer must be a number");
-        return;
-      }
-      if (answerType !== "exact" && !rangeTolerance) {
-        toast.error("Enter a tolerance value for range answers");
-        return;
-      }
+    }
+
+    if (isRange && !rangeWidth) {
+      toast.error("Enter a range width");
+      return;
     }
 
     const points = dropOff
@@ -521,7 +517,8 @@ function AddQuestionForm({
         description: description || undefined,
         answer: isSimulation ? 0 : parseFloat(answer),
         answerType,
-        rangeTolerance: rangeTolerance ? parseFloat(rangeTolerance) : undefined,
+        answerSource,
+        rangeTolerance: isRange ? parseFloat(rangeWidth) : undefined,
         maxPoints: parseInt(maxPoints) || 100,
         maxAttempts: parseInt(maxAttempts) || 3,
         pointsDropOff: points,
@@ -561,45 +558,34 @@ function AddQuestionForm({
         />
       </div>
 
+      {/* Answer Source */}
       <div className="space-y-2">
-        <Label>Answer Type</Label>
-        <div className="flex gap-2 flex-wrap">
+        <Label>Answer Source</Label>
+        <div className="flex gap-2">
           <Button
             type="button"
             size="sm"
-            variant={answerType === "exact" ? "default" : "outline"}
-            onClick={() => setAnswerType("exact")}
+            variant={answerSource === "point" ? "default" : "outline"}
+            onClick={() => setAnswerSource("point")}
           >
-            Exact Number
+            Point
           </Button>
           <Button
             type="button"
             size="sm"
-            variant={answerType === "range_absolute" ? "default" : "outline"}
-            onClick={() => setAnswerType("range_absolute")}
-          >
-            Range (Absolute)
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={answerType === "range_percent" ? "default" : "outline"}
-            onClick={() => setAnswerType("range_percent")}
-          >
-            Range (%)
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={answerType === "simulation" ? "default" : "outline"}
-            onClick={() => setAnswerType("simulation")}
+            variant={answerSource === "simulation" ? "default" : "outline"}
+            onClick={() => {
+              setAnswerSource("simulation");
+              if (answerType === "exact") setAnswerType("range_absolute");
+            }}
           >
             Simulation
           </Button>
         </div>
       </div>
 
-      {isSimulation ? (
+      {/* Simulation config */}
+      {isSimulation && (
         <>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -642,93 +628,101 @@ function AddQuestionForm({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Number of simulations (n)</Label>
-              <Input
-                type="number"
-                value={simulationN}
-                onChange={(e) => setSimulationN(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Max Points</Label>
-              <Input
-                type="number"
-                value={maxPoints}
-                onChange={(e) => setMaxPoints(e.target.value)}
-              />
-            </div>
-          </div>
-
           <div className="space-y-2">
-            <Label>Range Tolerance (max spread)</Label>
+            <Label>Number of simulations (n)</Label>
             <Input
               type="number"
-              step="any"
-              placeholder="e.g. 5 means players can submit a range 5 wide"
-              value={rangeTolerance}
-              onChange={(e) => setRangeTolerance(e.target.value)}
+              value={simulationN}
+              onChange={(e) => setSimulationN(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">
-              Limits how wide the player's range [min, max] can be. Players score
-              based on the proportion of simulation results that fall in their range.
-            </p>
           </div>
-        </>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Correct Answer</Label>
-              <Input
-                type="number"
-                step="any"
-                placeholder="e.g. 500000"
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                required={!isSimulation}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Max Points</Label>
-              <Input
-                type="number"
-                value={maxPoints}
-                onChange={(e) => setMaxPoints(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {answerType !== "exact" && (
-            <div className="space-y-2">
-              <Label>
-                {answerType === "range_percent"
-                  ? "Tolerance (%)"
-                  : "Tolerance (absolute +/-)"}
-              </Label>
-              <Input
-                type="number"
-                step="any"
-                placeholder={
-                  answerType === "range_percent"
-                    ? "e.g. 10 for +/-10%"
-                    : "e.g. 50"
-                }
-                value={rangeTolerance}
-                onChange={(e) => setRangeTolerance(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                {answerType === "range_percent"
-                  ? `Teams must submit a range that contains the answer.`
-                  : `Teams must submit a range that contains the answer.`}
-              </p>
-            </div>
-          )}
         </>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
+      {/* Point answer */}
+      {!isSimulation && (
+        <div className="space-y-2">
+          <Label>Correct Answer</Label>
+          <Input
+            type="number"
+            step="any"
+            placeholder="e.g. 500000"
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            required
+          />
+        </div>
+      )}
+
+      {/* Response Type */}
+      <div className="space-y-2">
+        <Label>Response Type</Label>
+        <div className="flex gap-2 flex-wrap">
+          {!isSimulation && (
+            <Button
+              type="button"
+              size="sm"
+              variant={answerType === "exact" ? "default" : "outline"}
+              onClick={() => setAnswerType("exact")}
+            >
+              Exact Number
+            </Button>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant={answerType === "range_absolute" ? "default" : "outline"}
+            onClick={() => setAnswerType("range_absolute")}
+          >
+            Range (Absolute)
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={answerType === "range_percent" ? "default" : "outline"}
+            onClick={() => setAnswerType("range_percent")}
+          >
+            Range (%)
+          </Button>
+        </div>
+      </div>
+
+      {/* Range Width */}
+      {isRange && (
+        <div className="space-y-2">
+          <Label>
+            {answerType === "range_percent"
+              ? "Range Width (%)"
+              : "Range Width"}
+          </Label>
+          <Input
+            type="number"
+            step="any"
+            placeholder={
+              answerType === "range_percent"
+                ? "e.g. 20 means upper is 20% above lower"
+                : "e.g. 50 means range is 50 units wide"
+            }
+            value={rangeWidth}
+            onChange={(e) => setRangeWidth(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            {answerType === "range_percent"
+              ? "Players submit a range where the upper bound is at most this % above the lower bound."
+              : "Players submit a range that is at most this many units wide."}
+          </p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label>Max Points</Label>
+          <Input
+            type="number"
+            value={maxPoints}
+            onChange={(e) => setMaxPoints(e.target.value)}
+          />
+        </div>
         <div className="space-y-2">
           <Label>Max Attempts</Label>
           <Input
@@ -748,8 +742,8 @@ function AddQuestionForm({
       </div>
       <p className="text-xs text-muted-foreground">
         {isSimulation
-          ? "Points drop-off: each attempt's max possible points. Score = proportion of hits * drop-off value."
-          : "Points drop-off is a comma-separated list. 1st attempt gets the first value, 2nd attempt gets the second, etc."}
+          ? "Score = proportion of simulation hits * drop-off value for that attempt."
+          : "Points drop-off: 1st attempt gets the first value, 2nd attempt gets the second, etc."}
       </p>
       <Button
         type="submit"
@@ -757,7 +751,8 @@ function AddQuestionForm({
         disabled={
           loading ||
           !title ||
-          (isSimulation ? !simulationScript : !answer)
+          (isSimulation ? !simulationScript : !answer) ||
+          (isRange && !rangeWidth)
         }
       >
         {loading ? "Adding..." : "Add Question"}

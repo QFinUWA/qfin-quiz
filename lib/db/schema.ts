@@ -42,10 +42,15 @@ export const questions = sqliteTable("questions", {
   description: text("description"),
   answer: real("answer").notNull(),
   answerType: text("answer_type", {
-    enum: ["exact", "range_absolute", "range_percent", "simulation"],
+    enum: ["exact", "range_absolute", "range_percent"],
   })
     .notNull()
     .default("exact"),
+  answerSource: text("answer_source", {
+    enum: ["point", "simulation"],
+  })
+    .notNull()
+    .default("point"),
   rangeTolerance: real("range_tolerance"),
   simulationScript: text("simulation_script"),
   simulationN: integer("simulation_n"),

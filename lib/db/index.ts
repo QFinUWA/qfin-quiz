@@ -26,6 +26,9 @@ try {
 try {
   sqlite.exec(`ALTER TABLE questions ADD COLUMN simulation_results TEXT`);
 } catch {}
+try {
+  sqlite.exec(`ALTER TABLE questions ADD COLUMN answer_source TEXT NOT NULL DEFAULT 'point'`);
+} catch {}
 
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS sessions (

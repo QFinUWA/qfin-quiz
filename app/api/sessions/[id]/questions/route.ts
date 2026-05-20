@@ -39,7 +39,7 @@ export async function GET(
 
       const hasCorrect = teamSubmissions.some((s) => s.isCorrect);
 
-      const isSimulation = q.answerType === "simulation";
+      const isSimulation = q.answerSource === "simulation";
       let simulationResultCount: number | undefined;
       let simulationMin: number | undefined;
       let simulationMax: number | undefined;
@@ -56,6 +56,7 @@ export async function GET(
         title: q.title,
         description: q.description,
         answerType: q.answerType,
+        answerSource: q.answerSource,
         rangeTolerance: q.rangeTolerance,
         maxPoints: q.maxPoints,
         maxAttempts: q.maxAttempts,

@@ -15,7 +15,8 @@ export async function addQuestion(
     title: string;
     description?: string;
     answer: number;
-    answerType: "exact" | "range_absolute" | "range_percent" | "simulation";
+    answerType: "exact" | "range_absolute" | "range_percent";
+    answerSource: "point" | "simulation";
     rangeTolerance?: number;
     maxPoints: number;
     maxAttempts: number;
@@ -31,7 +32,7 @@ export async function addQuestion(
     .all();
 
   const id = generateId();
-  const isSimulation = data.answerType === "simulation";
+  const isSimulation = data.answerSource === "simulation";
 
   db.insert(questions)
     .values({
@@ -41,6 +42,7 @@ export async function addQuestion(
       description: data.description || null,
       answer: isSimulation ? 0 : data.answer,
       answerType: data.answerType,
+      answerSource: data.answerSource,
       rangeTolerance: data.rangeTolerance ?? null,
       maxPoints: data.maxPoints,
       maxAttempts: data.maxAttempts,
@@ -65,7 +67,7 @@ export async function realizeSimulation(questionId: string) {
     .get();
 
   if (!question) return { error: "Question not found" };
-  if (question.answerType !== "simulation")
+  if (question.answerSource !== "simulation")
     return { error: "Not a simulation question" };
   if (!question.simulationScript || !question.simulationN)
     return { error: "Missing simulation script or n" };
