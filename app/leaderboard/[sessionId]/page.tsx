@@ -34,6 +34,7 @@ export default function LeaderboardPage({
   const router = useRouter();
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [totalQuestions, setTotalQuestions] = useState(0);
+  const [joinCode, setJoinCode] = useState<string | null>(null);
 
   const fetchLeaderboard = useCallback(async () => {
     try {
@@ -41,6 +42,7 @@ export default function LeaderboardPage({
       const data = await res.json();
       setLeaderboard(data.leaderboard);
       setTotalQuestions(data.totalQuestions);
+      if (data.joinCode) setJoinCode(data.joinCode);
     } catch {
       // silent retry
     }
@@ -61,6 +63,14 @@ export default function LeaderboardPage({
             {totalQuestions} question{totalQuestions !== 1 ? "s" : ""} total
           </p>
         </div>
+        {joinCode && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground uppercase tracking-wider">Join</span>
+            <span className="font-mono text-2xl font-bold tracking-widest">
+              {joinCode}
+            </span>
+          </div>
+        )}
         <Button
           variant="outline"
           size="sm"

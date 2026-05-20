@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { teams, questions, submissions } from "@/lib/db/schema";
+import { sessions, teams, questions, submissions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +9,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: sessionId } = await params;
+
+  const session = db
+    .select()
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .get();
 
   const sessionTeams = db
     .select()
@@ -54,5 +60,6 @@ export async function GET(
   return Response.json({
     leaderboard,
     totalQuestions: sessionQuestions.length,
+    joinCode: session?.joinCode ?? null,
   });
 }
