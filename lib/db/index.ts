@@ -35,6 +35,12 @@ try {
 try {
   sqlite.exec(`ALTER TABLE questions ADD COLUMN answer_source TEXT NOT NULL DEFAULT 'point'`);
 } catch {}
+try {
+  sqlite.exec(`ALTER TABLE questions ADD COLUMN answer_text TEXT`);
+} catch {}
+try {
+  sqlite.exec(`ALTER TABLE submissions ADD COLUMN answer_text TEXT`);
+} catch {}
 
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS sessions (

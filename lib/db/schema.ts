@@ -44,10 +44,11 @@ export const questions = sqliteTable("questions", {
   description: text("description"),
   answer: real("answer").notNull(),
   answerType: text("answer_type", {
-    enum: ["exact", "range_absolute", "range_percent"],
+    enum: ["exact", "range_absolute", "range_percent", "text"],
   })
     .notNull()
     .default("exact"),
+  answerText: text("answer_text"),
   answerSource: text("answer_source", {
     enum: ["point", "simulation"],
   })
@@ -79,8 +80,9 @@ export const submissions = sqliteTable("submissions", {
     .references(() => teams.id),
   attemptNumber: integer("attempt_number").notNull(),
   submissionType: text("submission_type", {
-    enum: ["number", "range"],
+    enum: ["number", "range", "text"],
   }).notNull(),
+  answerText: text("answer_text"),
   answerValue: real("answer_value"),
   rangeMin: real("range_min"),
   rangeMax: real("range_max"),

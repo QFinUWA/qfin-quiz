@@ -78,6 +78,7 @@ export async function GET(
         pointsDropOff: JSON.parse(q.pointsDropOff),
         status: q.status,
         answer: q.status === "revealed" ? q.answer : undefined,
+        answerText: q.status === "revealed" ? q.answerText : undefined,
         attemptsUsed: teamSubmissions.length,
         hasCorrect,
         submissions: teamSubmissions,

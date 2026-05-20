@@ -8,10 +8,11 @@ import { eq, and } from "drizzle-orm";
 export async function submitAnswer(data: {
   questionId: string;
   teamId: string;
-  submissionType: "number" | "range";
+  submissionType: "number" | "range" | "text";
   answerValue?: number;
   rangeMin?: number;
   rangeMax?: number;
+  answerText?: string;
 }) {
   const question = db
     .select()
@@ -50,7 +51,15 @@ export async function submitAnswer(data: {
   const answerType = question.answerType || "exact";
   const isSimulation = question.answerSource === "simulation";
 
-  if (isSimulation) {
+  if (answerType === "text") {
+    if (!data.answerText || !data.answerText.trim()) {
+      return { error: "Text answer required" };
+    }
+    const expected = (question.answerText || "").trim().toLowerCase();
+    const given = data.answerText.trim().toLowerCase();
+    isCorrect = given === expected;
+    pointsAwarded = isCorrect ? pointsForAttempt : 0;
+  } else if (isSimulation) {
     const results: number[] = JSON.parse(question.simulationResults || "[]");
     if (results.length === 0) {
       return { error: "Simulation not yet realized" };
@@ -124,6 +133,7 @@ export async function submitAnswer(data: {
       attemptNumber,
       submissionType: data.submissionType,
       answerValue: data.answerValue ?? null,
+      answerText: data.answerText ?? null,
       rangeMin: data.rangeMin ?? null,
       rangeMax: data.rangeMax ?? null,
       isCorrect,

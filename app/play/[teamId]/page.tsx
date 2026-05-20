@@ -21,7 +21,7 @@ type Question = {
   id: string;
   title: string;
   description: string | null;
-  answerType: "exact" | "range_absolute" | "range_percent";
+  answerType: "exact" | "range_absolute" | "range_percent" | "text";
   answerSource: "point" | "simulation";
   rangeTolerance: number | null;
   maxPoints: number;
@@ -29,12 +29,14 @@ type Question = {
   pointsDropOff: number[];
   status: string;
   answer?: number;
+  answerText?: string;
   attemptsUsed: number;
   hasCorrect: boolean;
   submissions: {
     attemptNumber: number;
     submissionType: string;
     answerValue: number | null;
+    answerText: string | null;
     rangeMin: number | null;
     rangeMax: number | null;
     isCorrect: boolean;
@@ -126,8 +128,8 @@ export default function PlayPage({
 
   async function handleSubmit(
     questionId: string,
-    type: "number" | "range",
-    values: { answer?: number; min?: number; max?: number }
+    type: "number" | "range" | "text",
+    values: { answer?: number; min?: number; max?: number; answerText?: string }
   ) {
     setSubmitting(questionId);
     try {
@@ -136,6 +138,7 @@ export default function PlayPage({
         teamId,
         submissionType: type,
         answerValue: values.answer,
+        answerText: values.answerText,
         rangeMin: values.min,
         rangeMax: values.max,
       });
@@ -268,17 +271,19 @@ function QuestionCard({
   question: Question;
   onSubmit: (
     id: string,
-    type: "number" | "range",
-    values: { answer?: number; min?: number; max?: number }
+    type: "number" | "range" | "text",
+    values: { answer?: number; min?: number; max?: number; answerText?: string }
   ) => void;
   submitting: boolean;
   sessionActive: boolean;
 }) {
   const isExact = question.answerType === "exact";
+  const isText = question.answerType === "text";
   const isSimulation = question.answerSource === "simulation";
-  const showRange = !isExact;
+  const showRange = !isExact && !isText;
   const [collapsed, setCollapsed] = useState(false);
   const [answer, setAnswer] = useState("");
+  const [textAnswer, setTextAnswer] = useState("");
   const [rangeMin, setRangeMin] = useState("");
   const [rangeMax, setRangeMax] = useState("");
 
@@ -326,7 +331,13 @@ function QuestionCard({
 
   function handleFormSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (isExact) {
+    if (isText) {
+      if (!textAnswer.trim()) {
+        toast.error("Enter an answer");
+        return;
+      }
+      onSubmit(question.id, "text", { answerText: textAnswer });
+    } else if (isExact) {
       const val = parseFloat(answer);
       if (isNaN(val)) {
         toast.error("Enter a valid number");
@@ -342,21 +353,25 @@ function QuestionCard({
       onSubmit(question.id, "range", { min: minNum, max: maxNum });
     }
     setAnswer("");
+    setTextAnswer("");
     setRangeMin("");
     setRangeMax("");
   }
 
-  const answerTypeLabel = isSimulation
-    ? question.answerType === "exact"
-      ? "Simulation - submit an exact number"
-      : question.answerType === "range_percent"
-        ? `Simulation - submit a range (upper at most ${question.rangeTolerance}% above lower)`
-        : `Simulation - submit a range (${question.rangeTolerance} units wide)`
-    : question.answerType === "exact"
-      ? "Exact answer"
-      : question.answerType === "range_percent"
-        ? `Range answer - upper bound at most ${question.rangeTolerance}% above lower bound`
-        : `Range answer - ${question.rangeTolerance} units wide`;
+  const simCount = question.simulationResultCount;
+  const answerTypeLabel = isText
+    ? "Text answer"
+    : isSimulation
+      ? question.answerType === "exact"
+        ? `Simulation (${simCount ? `${simCount.toLocaleString()} runs` : "..."}) - submit an exact number`
+        : question.answerType === "range_percent"
+          ? `Simulation (${simCount ? `${simCount.toLocaleString()} runs` : "..."}) - submit a range (upper at most ${question.rangeTolerance}% above lower)`
+          : `Simulation (${simCount ? `${simCount.toLocaleString()} runs` : "..."}) - submit a range (${question.rangeTolerance} units wide)`
+      : question.answerType === "exact"
+        ? "Exact answer"
+        : question.answerType === "range_percent"
+          ? `Range answer - upper bound at most ${question.rangeTolerance}% above lower bound`
+          : `Range answer - ${question.rangeTolerance} units wide`;
 
   return (
     <Card
@@ -406,7 +421,7 @@ function QuestionCard({
               </Badge>
             ) : question.status === "revealed" ? (
               <Badge variant="secondary">
-                Answer: {question.answer}
+                Answer: {isText ? question.answerText : question.answer}
               </Badge>
             ) : (
               <Badge variant="outline">{nextPoints} pts</Badge>
@@ -432,7 +447,17 @@ function QuestionCard({
       {!collapsed && canSubmit && (
         <CardContent>
           <form onSubmit={handleFormSubmit} className="space-y-3">
-            {showRange ? <>
+            {isText ? (
+              <div className="space-y-2">
+                <Label>Your Answer</Label>
+                <Input
+                  type="text"
+                  placeholder="Enter your answer"
+                  value={textAnswer}
+                  onChange={(e) => setTextAnswer(e.target.value)}
+                />
+              </div>
+            ) : showRange ? <>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <div className="flex justify-between items-baseline">
@@ -509,9 +534,11 @@ function QuestionCard({
               }`}
             >
               #{s.attemptNumber}:{" "}
-              {s.submissionType === "number"
-                ? s.answerValue
-                : `[${s.rangeMin}, ${s.rangeMax}]`}{" "}
+              {s.submissionType === "text"
+                ? s.answerText
+                : s.submissionType === "number"
+                  ? s.answerValue
+                  : `[${s.rangeMin}, ${s.rangeMax}]`}{" "}
               -{" "}
               {isSimulation
                 ? `+${s.pointsAwarded} pts`

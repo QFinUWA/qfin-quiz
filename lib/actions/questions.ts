@@ -15,8 +15,9 @@ export async function addQuestion(
     title: string;
     description?: string;
     answer: number;
-    answerType: "exact" | "range_absolute" | "range_percent";
+    answerType: "exact" | "range_absolute" | "range_percent" | "text";
     answerSource: "point" | "simulation";
+    answerText?: string;
     rangeTolerance?: number;
     maxPoints: number;
     maxAttempts: number;
@@ -40,9 +41,10 @@ export async function addQuestion(
       sessionId,
       title: data.title,
       description: data.description || null,
-      answer: isSimulation ? 0 : data.answer,
+      answer: isSimulation || data.answerType === "text" ? 0 : data.answer,
       answerType: data.answerType,
       answerSource: data.answerSource,
+      answerText: data.answerType === "text" ? (data.answerText || null) : null,
       rangeTolerance: data.rangeTolerance ?? null,
       maxPoints: data.maxPoints,
       maxAttempts: data.maxAttempts,
@@ -134,7 +136,8 @@ export async function updateQuestion(
     title?: string;
     description?: string;
     answer?: number;
-    answerType?: "exact" | "range_absolute" | "range_percent";
+    answerType?: "exact" | "range_absolute" | "range_percent" | "text";
+    answerText?: string | null;
     rangeTolerance?: number | null;
     maxPoints?: number;
     maxAttempts?: number;
@@ -146,6 +149,7 @@ export async function updateQuestion(
   if (data.description !== undefined) updates.description = data.description || null;
   if (data.answer !== undefined) updates.answer = data.answer;
   if (data.answerType !== undefined) updates.answerType = data.answerType;
+  if (data.answerText !== undefined) updates.answerText = data.answerText;
   if (data.rangeTolerance !== undefined) updates.rangeTolerance = data.rangeTolerance;
   if (data.maxPoints !== undefined) updates.maxPoints = data.maxPoints;
   if (data.maxAttempts !== undefined) updates.maxAttempts = data.maxAttempts;

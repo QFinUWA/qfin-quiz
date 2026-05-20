@@ -564,11 +564,13 @@ export default function AdminPage({
                 const isSim = q.answerSource === "simulation";
 
                 const responseLabel =
-                  q.answerType === "exact"
-                    ? "Exact"
-                    : q.answerType === "range_percent"
-                      ? `Range (${q.rangeTolerance}% wide)`
-                      : `Range (${q.rangeTolerance} wide)`;
+                  q.answerType === "text"
+                    ? "Text"
+                    : q.answerType === "exact"
+                      ? "Exact"
+                      : q.answerType === "range_percent"
+                        ? `Range (${q.rangeTolerance}% wide)`
+                        : `Range (${q.rangeTolerance} wide)`;
 
                 return (
                   <div key={q.id} className="border rounded-lg p-4 space-y-2">
@@ -707,8 +709,9 @@ function AddQuestionForm({
   const [description, setDescription] = useState("");
   const [answer, setAnswer] = useState("");
   const [answerSource, setAnswerSource] = useState<"point" | "simulation">("point");
+  const [answerText, setAnswerText] = useState("");
   const [answerType, setAnswerType] = useState<
-    "exact" | "range_absolute" | "range_percent"
+    "exact" | "range_absolute" | "range_percent" | "text"
   >("exact");
   const [rangeWidth, setRangeWidth] = useState("");
   const [maxPoints, setMaxPoints] = useState("100");
@@ -721,7 +724,8 @@ function AddQuestionForm({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isSimulation = answerSource === "simulation";
-  const isRange = answerType !== "exact";
+  const isText = answerType === "text";
+  const isRange = answerType !== "exact" && answerType !== "text";
 
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -741,7 +745,12 @@ function AddQuestionForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!isSimulation) {
+    if (isText) {
+      if (!answerText.trim()) {
+        toast.error("Enter a text answer");
+        return;
+      }
+    } else if (!isSimulation) {
       const answerNum = parseFloat(answer);
       if (isNaN(answerNum)) {
         toast.error("Answer must be a number");
@@ -781,9 +790,10 @@ function AddQuestionForm({
       await addQuestion(sessionId, {
         title,
         description: description || undefined,
-        answer: isSimulation ? 0 : parseFloat(answer),
+        answer: isSimulation || isText ? 0 : parseFloat(answer),
         answerType,
         answerSource,
+        answerText: isText ? answerText : undefined,
         rangeTolerance: isRange ? parseFloat(rangeWidth) : undefined,
         maxPoints: parseInt(maxPoints) || 100,
         maxAttempts: parseInt(maxAttempts) || 3,
@@ -903,7 +913,7 @@ function AddQuestionForm({
       )}
 
       {/* Point answer */}
-      {!isSimulation && (
+      {!isSimulation && !isText && (
         <div className="space-y-2">
           <Label>Correct Answer</Label>
           <Input
@@ -945,8 +955,33 @@ function AddQuestionForm({
           >
             Range (%)
           </Button>
+          {!isSimulation && (
+            <Button
+              type="button"
+              size="sm"
+              variant={answerType === "text" ? "default" : "outline"}
+              onClick={() => setAnswerType("text")}
+            >
+              Text
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Text Answer */}
+      {isText && (
+        <div className="space-y-2">
+          <Label>Correct Text Answer</Label>
+          <Input
+            placeholder="e.g. 1/3"
+            value={answerText}
+            onChange={(e) => setAnswerText(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Players must type this exactly (case-insensitive).
+          </p>
+        </div>
+      )}
 
       {/* Range Width */}
       {isRange && (
@@ -1012,7 +1047,7 @@ function AddQuestionForm({
         disabled={
           loading ||
           !title ||
-          (isSimulation ? !simulationScript : !answer) ||
+          (isText ? !answerText : isSimulation ? !simulationScript : !answer) ||
           (isRange && !rangeWidth)
         }
       >
@@ -1067,7 +1102,8 @@ function DetailsDialog({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [answer, setAnswer] = useState("");
-  const [answerType, setAnswerType] = useState<"exact" | "range_absolute" | "range_percent">("exact");
+  const [answerType, setAnswerType] = useState<"exact" | "range_absolute" | "range_percent" | "text">("exact");
+  const [answerTextEdit, setAnswerTextEdit] = useState("");
   const [rangeWidth, setRangeWidth] = useState("");
   const [maxPoints, setMaxPoints] = useState("");
   const [maxAttempts, setMaxAttempts] = useState("");
@@ -1079,7 +1115,8 @@ function DetailsDialog({
       setTitle(question.title);
       setDescription(question.description || "");
       setAnswer(String(question.answer));
-      setAnswerType(question.answerType as "exact" | "range_absolute" | "range_percent");
+      setAnswerType(question.answerType as "exact" | "range_absolute" | "range_percent" | "text");
+      setAnswerTextEdit(question.answerText || "");
       setRangeWidth(question.rangeTolerance != null ? String(question.rangeTolerance) : "");
       setMaxPoints(String(question.maxPoints));
       setMaxAttempts(String(question.maxAttempts));
@@ -1096,7 +1133,8 @@ function DetailsDialog({
       ? JSON.parse(question.simulationResults)
       : null;
   const histData = simResults ? buildHistogramData(simResults) : null;
-  const isRange = answerType !== "exact";
+  const isText = answerType === "text";
+  const isRange = answerType !== "exact" && answerType !== "text";
 
   async function handleSave() {
     const points = dropOff
@@ -1112,8 +1150,9 @@ function DetailsDialog({
       await updateQuestion(question!.id, {
         title,
         description,
-        answer: isSim ? undefined : parseFloat(answer),
+        answer: isSim || isText ? undefined : parseFloat(answer),
         answerType,
+        answerText: isText ? answerTextEdit : null,
         rangeTolerance: isRange ? parseFloat(rangeWidth) : null,
         maxPoints: parseInt(maxPoints) || 100,
         maxAttempts: parseInt(maxAttempts) || 3,
@@ -1170,10 +1209,17 @@ function DetailsDialog({
               <Label>Description</Label>
               <Textarea value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
-            {!isSim && (
+            {!isSim && !isText && (
               <div className="space-y-2">
                 <Label>Answer</Label>
                 <Input type="number" step="any" value={answer} onChange={(e) => setAnswer(e.target.value)} />
+              </div>
+            )}
+            {isText && (
+              <div className="space-y-2">
+                <Label>Correct Text Answer</Label>
+                <Input value={answerTextEdit} onChange={(e) => setAnswerTextEdit(e.target.value)} placeholder="e.g. 1/3" />
+                <p className="text-xs text-muted-foreground">Case-insensitive match.</p>
               </div>
             )}
             <div className="space-y-2">
@@ -1182,6 +1228,7 @@ function DetailsDialog({
                 <Button type="button" size="sm" variant={answerType === "exact" ? "default" : "outline"} onClick={() => setAnswerType("exact")}>Exact</Button>
                 <Button type="button" size="sm" variant={answerType === "range_absolute" ? "default" : "outline"} onClick={() => setAnswerType("range_absolute")}>Range (Absolute)</Button>
                 <Button type="button" size="sm" variant={answerType === "range_percent" ? "default" : "outline"} onClick={() => setAnswerType("range_percent")}>Range (%)</Button>
+                {!isSim && <Button type="button" size="sm" variant={answerType === "text" ? "default" : "outline"} onClick={() => setAnswerType("text")}>Text</Button>}
               </div>
             </div>
             {isRange && (
@@ -1223,18 +1270,25 @@ function DetailsDialog({
               </p>
               <p>
                 <span className="font-medium">Response:</span>{" "}
-                {question.answerType === "exact"
-                  ? "Exact"
-                  : question.answerType === "range_percent"
-                    ? `Range (${question.rangeTolerance}% wide)`
-                    : `Range (${question.rangeTolerance} wide)`}
+                {question.answerType === "text"
+                  ? "Text"
+                  : question.answerType === "exact"
+                    ? "Exact"
+                    : question.answerType === "range_percent"
+                      ? `Range (${question.rangeTolerance}% wide)`
+                      : `Range (${question.rangeTolerance} wide)`}
               </p>
-              {!isSim && (
+              {question.answerType === "text" ? (
+                <p>
+                  <span className="font-medium">Answer:</span>{" "}
+                  <span className="font-mono">{question.answerText}</span>
+                </p>
+              ) : !isSim ? (
                 <p>
                   <span className="font-medium">Answer:</span>{" "}
                   <span className="font-mono">{question.answer}</span>
                 </p>
-              )}
+              ) : null}
               <p>
                 <span className="font-medium">Points:</span>{" "}
                 Max {question.maxPoints} | Attempts: {question.maxAttempts} | Drop-off: {question.pointsDropOff}
@@ -1303,7 +1357,7 @@ function DetailsDialog({
                             <TableCell className="text-xs font-medium py-1.5">{i === 0 ? t.name : ""}</TableCell>
                             <TableCell className="text-xs py-1.5 text-muted-foreground">{s.attemptNumber}</TableCell>
                             <TableCell className="text-xs py-1.5 font-mono">
-                              {s.submissionType === "number" ? s.answerValue : `[${s.rangeMin}, ${s.rangeMax}]`}
+                              {s.submissionType === "text" ? s.answerText : s.submissionType === "number" ? s.answerValue : `[${s.rangeMin}, ${s.rangeMax}]`}
                             </TableCell>
                             <TableCell className={`text-xs py-1.5 text-right font-mono ${s.isCorrect ? "text-green-500" : s.pointsAwarded > 0 ? "text-blue-500" : "text-muted-foreground"}`}>
                               {s.pointsAwarded > 0 ? `+${s.pointsAwarded}` : s.isCorrect ? "correct" : "-"}
