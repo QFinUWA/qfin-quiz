@@ -170,6 +170,6 @@ export async function getQuestionsForSession(sessionId: string) {
     .select()
     .from(questions)
     .where(eq(questions.sessionId, sessionId))
-    .orderBy(questions.sortOrder)
+    .orderBy(questions.title)
     .all();
 }

@@ -151,7 +151,7 @@ export async function getSessionData(sessionId: string) {
     .select()
     .from(questions)
     .where(eq(questions.sessionId, sessionId))
-    .orderBy(questions.sortOrder)
+    .orderBy(questions.title)
     .all();
 
   const allSubmissions = db
@@ -185,6 +185,48 @@ export async function getActiveSessions() {
     .where(gt(sessions.createdAt, oneWeekAgo))
     .orderBy(desc(sessions.createdAt))
     .all();
+}
+
+export async function resetSessionProgress(sessionId: string) {
+  const questionIds = db
+    .select({ id: questions.id })
+    .from(questions)
+    .where(eq(questions.sessionId, sessionId))
+    .all()
+    .map((q) => q.id);
+
+  const teamIds = db
+    .select({ id: teams.id })
+    .from(teams)
+    .where(eq(teams.sessionId, sessionId))
+    .all()
+    .map((t) => t.id);
+
+  if (questionIds.length > 0) {
+    db.delete(submissions)
+      .where(inArray(submissions.questionId, questionIds))
+      .run();
+
+    db.update(questions)
+      .set({ status: "hidden" })
+      .where(inArray(questions.id, questionIds))
+      .run();
+  }
+
+  if (teamIds.length > 0) {
+    db.delete(players)
+      .where(inArray(players.teamId, teamIds))
+      .run();
+  }
+
+  db.delete(teams)
+    .where(eq(teams.sessionId, sessionId))
+    .run();
+
+  db.update(sessions)
+    .set({ status: "lobby", scheduledStartAt: null, scheduledEndAt: null })
+    .where(eq(sessions.id, sessionId))
+    .run();
 }
 
 export async function deleteExpiredSessions() {

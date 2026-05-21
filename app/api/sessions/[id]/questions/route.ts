@@ -31,7 +31,7 @@ export async function GET(
     .select()
     .from(questions)
     .where(eq(questions.sessionId, sessionId))
-    .orderBy(questions.sortOrder)
+    .orderBy(questions.title)
     .all();
 
   const activeQuestions = sessionQuestions

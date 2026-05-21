@@ -48,6 +48,7 @@ import {
   updateSessionStatus,
   setScheduledStart,
   setScheduledEnd,
+  resetSessionProgress,
 } from "@/lib/actions/sessions";
 import {
   addQuestion,
@@ -74,7 +75,7 @@ export default function AdminPage({
   const [detailsQuestion, setDetailsQuestion] = useState<string | null>(null);
   const [detailsEditing, setDetailsEditing] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{
-    type: "close" | "reveal" | "reveal-all" | "delete" | "start-session" | "end-session" | "reopen-session";
+    type: "close" | "reveal" | "reveal-all" | "delete" | "start-session" | "end-session" | "reopen-session" | "reset-session";
     questionId?: string;
     title: string;
   } | null>(null);
@@ -262,6 +263,13 @@ export default function AdminPage({
               >
                 Leaderboard
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmAction({ type: "reset-session", title: "" })}
+              >
+                Reset All
+              </Button>
             {data.session.status === "lobby" && (
               <>
                 <Button
@@ -434,41 +442,49 @@ export default function AdminPage({
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {confirmAction?.type === "start-session"
-                  ? "Start Session"
-                  : confirmAction?.type === "end-session"
-                    ? "End Session"
-                    : confirmAction?.type === "reopen-session"
-                      ? "Reopen Session"
-                      : confirmAction?.type === "close"
-                        ? "Close Question"
-                        : confirmAction?.type === "delete"
-                          ? "Delete Question"
-                          : "Reveal Answer"}
+                {confirmAction?.type === "reset-session"
+                  ? "Reset Session"
+                  : confirmAction?.type === "start-session"
+                    ? "Start Session"
+                    : confirmAction?.type === "end-session"
+                      ? "End Session"
+                      : confirmAction?.type === "reopen-session"
+                        ? "Reopen Session"
+                        : confirmAction?.type === "close"
+                          ? "Close Question"
+                          : confirmAction?.type === "delete"
+                            ? "Delete Question"
+                            : "Reveal Answer"}
               </DialogTitle>
               <DialogDescription>
-                {confirmAction?.type === "start-session"
-                  ? "Start the session? Players will be able to see and answer active questions."
-                  : confirmAction?.type === "end-session"
-                    ? "End the session? Players will no longer be able to submit answers. You can reopen it later."
-                    : confirmAction?.type === "reopen-session"
-                      ? "Reopen the session? Players will be able to submit answers again."
-                      : confirmAction?.type === "reveal-all"
-                        ? "This will reveal answers for ALL questions. This cannot be undone."
-                        : confirmAction?.type === "reveal"
-                          ? `Reveal the answer for "${confirmAction.title}"? This cannot be undone.`
-                          : confirmAction?.type === "delete"
-                            ? `Delete "${confirmAction?.title}"? This cannot be undone.`
-                            : `Close "${confirmAction?.title}"? Players will no longer be able to submit answers.`}
+                {confirmAction?.type === "reset-session"
+                  ? "This will delete all teams, players, and submissions, and reset all questions to hidden. Questions themselves are kept. This cannot be undone."
+                  : confirmAction?.type === "start-session"
+                    ? "Start the session? Players will be able to see and answer active questions."
+                    : confirmAction?.type === "end-session"
+                      ? "End the session? Players will no longer be able to submit answers. You can reopen it later."
+                      : confirmAction?.type === "reopen-session"
+                        ? "Reopen the session? Players will be able to submit answers again."
+                        : confirmAction?.type === "reveal-all"
+                          ? "This will reveal answers for ALL questions. This cannot be undone."
+                          : confirmAction?.type === "reveal"
+                            ? `Reveal the answer for "${confirmAction.title}"? This cannot be undone.`
+                            : confirmAction?.type === "delete"
+                              ? `Delete "${confirmAction?.title}"? This cannot be undone.`
+                              : `Close "${confirmAction?.title}"? Players will no longer be able to submit answers.`}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
               <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
               <Button
                 variant={confirmAction?.type === "close" || confirmAction?.type === "start-session" || confirmAction?.type === "reopen-session" ? "default" : "destructive"}
+
                 onClick={async () => {
                   if (!confirmAction) return;
-                  if (confirmAction.type === "start-session") {
+                  if (confirmAction.type === "reset-session") {
+                    await resetSessionProgress(sessionId);
+                    toast.success("Session reset - all teams, players, and scores cleared");
+                  } else if (confirmAction.type === "start-session") {
                     await updateSessionStatus(sessionId, "active");
                     toast.success("Session started");
                   } else if (confirmAction.type === "end-session") {
@@ -494,7 +510,7 @@ export default function AdminPage({
                   fetchData();
                 }}
               >
-                {confirmAction?.type === "start-session" ? "Start" : confirmAction?.type === "end-session" ? "End" : confirmAction?.type === "reopen-session" ? "Reopen" : confirmAction?.type === "close" ? "Close" : confirmAction?.type === "delete" ? "Delete" : "Reveal"}
+                {confirmAction?.type === "reset-session" ? "Reset" : confirmAction?.type === "start-session" ? "Start" : confirmAction?.type === "end-session" ? "End" : confirmAction?.type === "reopen-session" ? "Reopen" : confirmAction?.type === "close" ? "Close" : confirmAction?.type === "delete" ? "Delete" : "Reveal"}
               </Button>
             </DialogFooter>
           </DialogContent>
