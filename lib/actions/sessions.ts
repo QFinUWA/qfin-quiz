@@ -171,7 +171,7 @@ export async function getSessionData(sessionId: string) {
 }
 
 export async function getActiveSessions() {
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   return db
     .select({
@@ -182,7 +182,7 @@ export async function getActiveSessions() {
       createdAt: sessions.createdAt,
     })
     .from(sessions)
-    .where(gt(sessions.createdAt, oneDayAgo))
+    .where(gt(sessions.createdAt, oneWeekAgo))
     .orderBy(desc(sessions.createdAt))
     .all();
 }
